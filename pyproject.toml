@@ -1,0 +1,12 @@
+[project]
+name = "clearcommit-teams"
+version = "0.1.0"
+description = "Evidence-linked sales communication coaching and a manager-reviewed team playbook."
+requires-python = ">=3.11"
+dependencies = [
+    "pywebview==6.2.1",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"

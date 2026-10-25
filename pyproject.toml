@@ -1,10 +1,16 @@
 [project]
 name = "clearcommit-teams"
-version = "0.1.0"
-description = "Evidence-linked sales communication coaching and a manager-reviewed team playbook."
+version = "0.2.0"
+description = "Evidence-linked coaching and a manager-reviewed team playbook, local and networked."
 requires-python = ">=3.11"
 dependencies = [
     "pywebview==6.2.1",
+    "fastapi==0.162.0",
+    "uvicorn[standard]==0.54.0",
+    "sqlalchemy==2.1.6",
+    "pyjwt==2.15.1",
+    "httpx==0.28.1",
+    "email-validator",
 ]
 
 [tool.pytest.ini_options]

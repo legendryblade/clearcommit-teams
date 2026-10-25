@@ -1,0 +1,702 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self' http://127.0.0.1:8770 http://localhost:8770 ws://127.0.0.1:8770 ws://localhost:8770; base-uri 'none'; form-action 'none'">
+  <title>ClearCommit Teams</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231b3b32'/%3E%3Cpath d='M20 32a10 10 0 0 1 10-10h8a10 10 0 0 1 0 20h-4' fill='none' stroke='%23f4ede1' stroke-width='5' stroke-linecap='round'/%3E%3Cpath d='M44 32a10 10 0 0 1-10 10h-8a10 10 0 0 1 0-20h4' fill='none' stroke='%23d9822b' stroke-width='5' stroke-linecap='round'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to workspace</a>
+
+  <div class="boot-screen" id="boot-screen" aria-live="polite">
+    <div class="boot-inner">
+      <div class="boot-mark" aria-hidden="true">
+        <svg viewBox="0 0 48 48" role="img" focusable="false">
+          <rect x="3" y="5" width="29" height="22" rx="7"></rect>
+          <rect x="16" y="16" width="29" height="22" rx="7"></rect>
+          <path d="M22 27.5l4 4 8.5-9"></path>
+        </svg>
+      </div>
+      <p class="boot-kicker">Local-first conversation coaching</p>
+      <h1>ClearCommit <em>Teams</em></h1>
+      <p class="boot-message" id="boot-message">Opening your local workspace…</p>
+      <div class="boot-progress" aria-hidden="true"><span></span></div>
+      <button class="button button-primary" id="boot-retry" type="button" hidden>Try again</button>
+      <p class="boot-foot">No account. No cloud workspace. Your transcripts stay in this project folder.</p>
+    </div>
+  </div>
+
+  <div class="app-shell" id="app" hidden>
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 48 48" focusable="false">
+            <rect x="3" y="5" width="29" height="22" rx="7"></rect>
+            <rect x="16" y="16" width="29" height="22" rx="7"></rect>
+            <path d="M22 27.5l4 4 8.5-9"></path>
+          </svg>
+        </div>
+        <div class="brand-copy">
+          <p class="brand-name">ClearCommit <span>Teams</span></p>
+          <p class="brand-line">Evidence-linked coaching. Human-reviewed playbook.</p>
+        </div>
+      </div>
+      <div class="topbar-actions">
+        <button class="provider-chip" id="provider-chip" type="button" data-action="open-settings" aria-haspopup="dialog">
+          <span class="provider-dot" id="provider-dot" aria-hidden="true"></span>
+          <span class="provider-copy">
+            <span class="provider-label" id="provider-label">Demo coach</span>
+            <span class="provider-detail" id="provider-detail">Local rules · no network</span>
+          </span>
+          <svg class="icon" viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+            <path d="M4 7.5l6 6 6-6"></path>
+          </svg>
+        </button>
+        <button class="icon-button" type="button" data-action="open-settings" aria-label="Open workspace settings" title="Workspace settings">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4z"></path>
+            <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.42 2.42-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V21h-3.42v-.09A1.7 1.7 0 0 0 9.96 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.42-2.42.06-.06A1.7 1.7 0 0 0 6 15.44 1.7 1.7 0 0 0 4.44 14.4H4.35v-3.42h.09A1.7 1.7 0 0 0 6 9.95a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.42-2.42.06.06a1.7 1.7 0 0 0 1.88.34A1.7 1.7 0 0 0 11 4.43V4.35h3.42v.09A1.7 1.7 0 0 0 15.45 6a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.42 2.42-.06.06A1.7 1.7 0 0 0 19.4 9.95c.1.64.64 1.06 1.29 1.06H21v3.42h-.09A1.7 1.7 0 0 0 19.4 15z"></path>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <div class="frame">
+      <aside class="rail" aria-label="Workspace navigation">
+        <div class="rail-block rail-workspaces">
+          <p class="eyebrow">Workspaces</p>
+          <nav class="workspace-nav" aria-label="Workspaces">
+            <button class="workspace-link is-active" type="button" data-view="desk" aria-current="page">
+              <span class="workspace-index">01</span>
+              <span class="workspace-copy">
+                <span class="workspace-name">Conversation desk</span>
+                <span class="workspace-note">Read, select, analyze</span>
+              </span>
+            </button>
+            <button class="workspace-link" type="button" data-view="coach">
+              <span class="workspace-index">02</span>
+              <span class="workspace-copy">
+                <span class="workspace-name">Sales coach</span>
+                <span class="workspace-note">Grounded observations</span>
+              </span>
+              <span class="workspace-badge" id="coach-nav-count" hidden>0</span>
+            </button>
+            <button class="workspace-link" type="button" data-view="playbook">
+              <span class="workspace-index">03</span>
+              <span class="workspace-copy">
+                <span class="workspace-name">Team playbook</span>
+                <span class="workspace-note">Draft, review, approve</span>
+              </span>
+              <span class="workspace-badge" id="playbook-nav-count" hidden>0</span>
+            </button>
+            <button class="workspace-link" type="button" data-view="signals">
+              <span class="workspace-index">04</span>
+              <span class="workspace-copy">
+                <span class="workspace-name">Team signals</span>
+                <span class="workspace-note">Design preview</span>
+              </span>
+            </button>
+            <button class="workspace-link" type="button" data-view="team">
+              <span class="workspace-index">05</span>
+              <span class="workspace-copy">
+                <span class="workspace-name">Team workspace</span>
+                <span class="workspace-note">Networked · shared playbook</span>
+              </span>
+              <span class="team-live-dot" id="team-live" aria-hidden="true">Not signed in</span>
+            </button>
+          </nav>
+        </div>
+
+        <div class="rail-block rail-conversations">
+          <div class="rail-heading">
+            <p class="eyebrow">Conversations</p>
+            <button class="mini-button" type="button" data-action="new-session">
+              <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M8 3v10M3 8h10"></path></svg>
+              New
+            </button>
+          </div>
+          <label class="search-field">
+            <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><circle cx="8.5" cy="8.5" r="4.8"></circle><path d="M12.2 12.2L17 17"></path></svg>
+            <input type="search" id="session-filter" placeholder="Filter conversations" aria-label="Filter conversations" autocomplete="off">
+          </label>
+          <div class="session-list" id="session-list" aria-live="polite"></div>
+        </div>
+
+        <div class="rail-footer">
+          <div class="rail-rule" aria-hidden="true"></div>
+          <p class="rail-motto">Every insight carries a quote.</p>
+          <p class="rail-meta"><span id="rail-build">CLEARCOMMIT TEAMS 0.2.0</span><span>Local + team</span></p>
+        </div>
+      </aside>
+
+      <main class="main" id="main" tabindex="-1">
+        <div class="global-alert" id="global-alert" role="alert" hidden></div>
+
+        <section class="view" id="view-desk" data-view-panel="desk">
+          <header class="view-head">
+            <div class="view-head-copy">
+              <p class="eyebrow">Conversation desk <span class="eyebrow-divider">/</span> <span id="desk-date">Undated</span></p>
+              <h1 id="desk-title" tabindex="-1">Conversation desk</h1>
+              <p class="view-subtitle" id="desk-subtitle">Choose a conversation to read the finalized transcript.</p>
+              <div class="meta-row" id="desk-meta"></div>
+            </div>
+            <div class="view-actions">
+              <button class="button button-quiet" id="import-button" type="button" data-action="open-import">
+                <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M10 13V3M6 7l4-4 4 4M4 13v3h12v-3"></path></svg>
+                Import transcript
+              </button>
+              <button class="button button-quiet" id="add-line-button" type="button" data-action="open-add-line">
+                <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M10 4v12M4 10h12"></path></svg>
+                Add line
+              </button>
+            </div>
+          </header>
+
+          <div class="desk-grid">
+            <section class="transcript-panel" aria-labelledby="transcript-heading">
+              <div class="panel-head">
+                <div>
+                  <p class="panel-kicker">Finalized text</p>
+                  <h2 id="transcript-heading">Transcript</h2>
+                </div>
+                <div class="selection-tools">
+                  <span class="selection-count" id="selection-count">0 selected</span>
+                  <button class="text-button" id="select-all-button" type="button" data-action="select-all">Select first 12</button>
+                  <button class="text-button" id="clear-selection-button" type="button" data-action="clear-selection">Clear</button>
+                </div>
+              </div>
+              <ol class="transcript-list" id="transcript-list" aria-live="polite"></ol>
+              <div class="panel-empty" id="transcript-empty" hidden>
+                <p class="empty-mark" aria-hidden="true">“ ”</p>
+                <h3>No finished lines yet</h3>
+                <p>Import a finalized transcript or add one line at a time. This build does not listen to a microphone.</p>
+                <button class="button button-primary" type="button" data-action="open-import">Import a transcript</button>
+              </div>
+            </section>
+
+            <aside class="desk-side" aria-label="Analysis controls">
+              <section class="analysis-card" aria-labelledby="analysis-heading">
+                <div class="analysis-top">
+                  <p class="panel-kicker panel-kicker-light">Coach input</p>
+                  <span class="quota" id="quota-label">0 / 12</span>
+                </div>
+                <h2 id="analysis-heading">Selected evidence</h2>
+                <p class="analysis-copy" id="analysis-copy">Tick the lines you want the coach to read. Every observation will cite one of them.</p>
+                <div class="ref-tray" id="selection-refs" aria-label="Selected evidence references">
+                  <span class="ref-empty">No lines selected</span>
+                </div>
+                <button class="button button-signal" id="analyze-button" type="button" data-action="analyze" disabled>
+                  Analyze selected
+                  <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M4 10h12M12 5l5 5-5 5"></path></svg>
+                </button>
+                <p class="analysis-hint" id="selection-note">Select up to 12 finalized lines.</p>
+                <div class="inline-alert" id="desk-analysis-error" role="alert" hidden></div>
+              </section>
+
+              <section class="brief-card" id="brief-card" hidden aria-labelledby="brief-heading">
+                <div class="brief-head">
+                  <p class="panel-kicker">Latest coach brief</p>
+                  <span class="run-badge" id="brief-provider">Demo coach</span>
+                </div>
+                <h2 id="brief-heading">What the selection shows</h2>
+                <p class="brief-summary" id="brief-summary"></p>
+                <div class="brief-foot">
+                  <span id="brief-count">0 observations</span>
+                  <button class="text-button text-button-light" type="button" data-action="goto-coach">Open coach</button>
+                </div>
+              </section>
+
+              <section class="assistant-card" aria-labelledby="assistant-heading">
+                <div class="assistant-head">
+                  <div>
+                    <p class="panel-kicker">Grounded assistant</p>
+                    <h2 id="assistant-heading">Ask the evidence</h2>
+                  </div>
+                  <span class="assistant-limit" id="assistant-limit">0 / 6</span>
+                </div>
+                <form id="ask-form" novalidate>
+                  <label class="field-label" for="ask-question">A question about the selected lines</label>
+                  <textarea id="ask-question" rows="2" maxlength="600" placeholder="What should I ask next?"></textarea>
+                  <div class="form-row form-row-between">
+                    <span class="field-hint">Answers cite evidence and state their limits.</span>
+                    <button class="button button-small" id="ask-button" type="submit" disabled>Ask</button>
+                  </div>
+                </form>
+                <div class="assistant-notes" id="assistant-notes"></div>
+              </section>
+            </aside>
+          </div>
+        </section>
+
+        <section class="view" id="view-coach" data-view-panel="coach" hidden>
+          <header class="view-head">
+            <div class="view-head-copy">
+              <p class="eyebrow">Sales coach <span class="eyebrow-divider">/</span> <span id="coach-context">No selection analyzed</span></p>
+              <h1 id="coach-title" tabindex="-1">Sales coach</h1>
+              <p class="view-subtitle">Coaching hypotheses tied to the customer’s or representative’s exact words. No hidden-intent claims.</p>
+              <div class="meta-row" id="coach-meta"></div>
+            </div>
+            <div class="view-actions">
+              <button class="button button-quiet" type="button" data-action="goto-desk">Back to transcript</button>
+            </div>
+          </header>
+
+          <div class="coach-summary" id="coach-summary" hidden>
+            <div>
+              <p class="panel-kicker">Run summary</p>
+              <p class="coach-summary-text" id="coach-summary-text"></p>
+            </div>
+            <div class="coach-summary-side">
+              <span class="run-badge" id="coach-provider">Demo coach</span>
+              <span class="field-hint" id="coach-limitations"></span>
+            </div>
+          </div>
+
+          <div class="coach-grid" id="coach-grid">
+            <aside class="insight-queue" aria-labelledby="queue-heading">
+              <div class="queue-head">
+                <div>
+                  <p class="panel-kicker">Observation queue</p>
+                  <h2 id="queue-heading">Findings</h2>
+                </div>
+                <span class="queue-count" id="insight-count-label">0</span>
+              </div>
+              <div class="filter-chips" id="insight-filters" aria-label="Filter findings"></div>
+              <div class="insight-list" id="insight-list"></div>
+            </aside>
+            <section class="insight-detail" id="insight-detail" aria-live="polite"></section>
+          </div>
+
+          <div class="panel-empty coach-empty" id="coach-empty" hidden>
+            <p class="empty-mark" aria-hidden="true">01 → 02</p>
+            <h3>No coach brief yet</h3>
+            <p>Select finalized lines in the conversation desk, then run the coach. The demo coach works offline; a configured provider sends only the selected text.</p>
+            <button class="button button-primary" type="button" data-action="goto-desk">Choose evidence</button>
+          </div>
+        </section>
+
+        <section class="view" id="view-playbook" data-view-panel="playbook" hidden>
+          <header class="view-head">
+            <div class="view-head-copy">
+              <p class="eyebrow">Team playbook <span class="eyebrow-divider">/</span> Manager-reviewed guidance</p>
+              <h1 id="playbook-title" tabindex="-1">Team playbook</h1>
+              <p class="view-subtitle">Turn a grounded coaching observation into guidance the team can reuse. Editing approved guidance reopens review.</p>
+            </div>
+            <div class="view-actions">
+              <button class="button button-quiet" type="button" data-action="refresh-playbook">Refresh</button>
+            </div>
+          </header>
+
+          <div class="playbook-grid">
+            <aside class="playbook-queue" aria-labelledby="playbook-queue-heading">
+              <div class="queue-head">
+                <div>
+                  <p class="panel-kicker">Team library</p>
+                  <h2 id="playbook-queue-heading">Entries</h2>
+                </div>
+                <span class="queue-count" id="playbook-count-label">0</span>
+              </div>
+              <div class="segmented" role="group" aria-label="Filter playbook entries">
+                <button class="segment is-active" type="button" data-playbook-filter="all">All</button>
+                <button class="segment" type="button" data-playbook-filter="draft">Draft</button>
+                <button class="segment" type="button" data-playbook-filter="approved">Approved</button>
+              </div>
+              <div class="playbook-list" id="playbook-list"></div>
+            </aside>
+
+            <section class="playbook-editor" aria-live="polite">
+              <div class="panel-empty" id="playbook-empty">
+                <p class="empty-mark" aria-hidden="true">03</p>
+                <h3>No entry selected</h3>
+                <p>Promote an observation from the sales coach, or choose an existing playbook entry. Approval requires a reviewer name, a discovery question, and evidence.</p>
+                <button class="button button-primary" type="button" data-action="goto-coach">Open the coach</button>
+              </div>
+
+              <form class="entry-form" id="playbook-form" novalidate hidden>
+                <div class="entry-head">
+                  <div>
+                    <p class="panel-kicker" id="pb-eyebrow">Playbook entry</p>
+                    <h2 id="pb-heading">Untitled entry</h2>
+                  </div>
+                  <div class="entry-status">
+                    <span class="status-chip" id="pb-status">Draft</span>
+                    <span class="field-hint" id="pb-updated"></span>
+                  </div>
+                </div>
+
+                <div class="entry-grid">
+                  <div class="field field-span">
+                    <label for="pb-title">Title</label>
+                    <input id="pb-title" name="title" type="text" maxlength="140" required>
+                  </div>
+                  <div class="field">
+                    <label for="pb-scenario">Communication scenario</label>
+                    <input id="pb-scenario" name="scenario" type="text" maxlength="240" required>
+                  </div>
+                  <div class="field">
+                    <label for="pb-category">Coaching category</label>
+                    <select id="pb-category" name="category">
+                      <option value="objection">Objection</option>
+                      <option value="unanswered_question">Unanswered question</option>
+                      <option value="ambiguity">Ambiguity</option>
+                      <option value="discovery">Discovery</option>
+                      <option value="next_step">Next step</option>
+                    </select>
+                  </div>
+                  <div class="field field-span">
+                    <label for="pb-objection">Customer moment or objection</label>
+                    <textarea id="pb-objection" name="objection" rows="3" maxlength="1000" required></textarea>
+                  </div>
+                  <div class="field field-span">
+                    <label for="pb-response">Approved response</label>
+                    <textarea id="pb-response" name="approved_response" rows="5" maxlength="3000" required></textarea>
+                  </div>
+                  <div class="field field-span">
+                    <label for="pb-questions">Discovery questions <span class="label-note">one per line</span></label>
+                    <textarea id="pb-questions" name="discovery_questions" rows="4" maxlength="4000"></textarea>
+                  </div>
+                </div>
+
+                <div class="evidence-box">
+                  <div class="evidence-box-head">
+                    <p class="panel-kicker">Supporting evidence</p>
+                    <div class="ref-tray ref-tray-light" id="pb-evidence-refs"></div>
+                  </div>
+                  <p class="evidence-summary" id="pb-evidence-summary"></p>
+                </div>
+
+                <div class="approval-box">
+                  <div class="approval-copy">
+                    <p class="panel-kicker">Human review</p>
+                    <p id="pb-gate-note">A named reviewer approves this guidance. Approval is a local record, not an account or signature service.</p>
+                  </div>
+                  <div class="approval-fields">
+                    <div class="field">
+                      <label for="pb-reviewer">Reviewer name</label>
+                      <input id="pb-reviewer" name="reviewer" type="text" maxlength="80" placeholder="Who reviewed this?" autocomplete="name">
+                    </div>
+                    <div class="field">
+                      <label for="pb-note">Review note <span class="label-note">optional</span></label>
+                      <input id="pb-note" name="note" type="text" maxlength="1000" placeholder="Context for the approval">
+                    </div>
+                  </div>
+                </div>
+
+                <div class="entry-actions">
+                  <span class="field-hint" id="pb-save-hint">Saving changes to approved guidance reopens review.</span>
+                  <div class="button-row">
+                    <button class="button button-quiet" id="pb-reset" type="button">Discard changes</button>
+                    <button class="button button-primary" id="pb-save" type="submit">Save draft</button>
+                    <button class="button button-approve" id="pb-approve" type="button" data-action="approve-playbook">Approve for the team</button>
+                  </div>
+                </div>
+                <div class="inline-alert" id="pb-error" role="alert" hidden></div>
+
+                <section class="review-history" aria-labelledby="pb-history-heading">
+                  <div class="review-history-head">
+                    <p class="panel-kicker">Audit trail</p>
+                    <h3 id="pb-history-heading">Review history</h3>
+                  </div>
+                  <ol id="pb-reviews"></ol>
+                </section>
+              </form>
+            </section>
+          </div>
+        </section>
+
+        <section class="view" id="view-signals" data-view-panel="signals" hidden>
+          <header class="view-head">
+            <div class="view-head-copy">
+              <p class="eyebrow">Team signals <span class="eyebrow-divider">/</span> Design preview</p>
+              <h1 id="signals-title" tabindex="-1">Team signals</h1>
+              <p class="view-subtitle">A local, aggregate view of approved guidance. This preview never ranks individual employees.</p>
+            </div>
+            <div class="view-actions">
+              <button class="button button-quiet" type="button" data-action="refresh-signals">Refresh preview</button>
+            </div>
+          </header>
+
+          <div class="signal-grid">
+            <article class="signal-card signal-card-hero">
+              <p class="panel-kicker">Approved guidance</p>
+              <p class="signal-number" id="signal-approved">0</p>
+              <p class="signal-caption">entries ready for the team</p>
+              <div class="signal-split">
+                <span><strong id="signal-drafts">0</strong> in draft</span>
+                <span><strong id="signal-sessions">0</strong> conversations</span>
+              </div>
+            </article>
+            <article class="signal-card">
+              <p class="panel-kicker">Conversation evidence</p>
+              <p class="signal-number" id="signal-utterances">0</p>
+              <p class="signal-caption">finalized lines in the workspace</p>
+              <p class="signal-note" id="signal-coverage">0 approved conversations contribute guidance.</p>
+            </article>
+            <article class="signal-card">
+              <p class="panel-kicker">Coach findings</p>
+              <p class="signal-number" id="signal-insights">0</p>
+              <p class="signal-caption">evidence-linked observations</p>
+              <p class="signal-note">Observations are hypotheses, not employee scores.</p>
+            </article>
+          </div>
+
+          <div class="signal-panels">
+            <section class="signal-panel" aria-labelledby="signal-category-heading">
+              <div class="panel-head">
+                <div>                  <p class="panel-kicker">Approved playbook</p>
+                  <h2 id="signal-category-heading">Guidance by category</h2>
+                </div>
+              </div>
+              <div class="meter-list" id="signal-categories"></div>
+            </section>
+            <section class="signal-panel" aria-labelledby="signal-mix-heading">
+              <div class="panel-head">
+                <div>
+                  <p class="panel-kicker">All findings</p>
+                  <h2 id="signal-mix-heading">Coaching mix</h2>
+                </div>
+              </div>
+              <div class="meter-list" id="signal-mix"></div>
+            </section>
+          </div>
+
+          <div class="consent-banner">
+            <div>
+              <p class="panel-kicker">Guardrail</p>
+              <p id="consent-note">Team Insights is a design preview. This build does not aggregate employee performance scores.</p>
+            </div>
+            <span class="status-chip status-chip-quiet">Preview only</span>
+          </div>
+        </section>
+
+        <section class="view" id="view-team" data-view-panel="team" hidden>
+          <header class="view-head">
+            <div class="view-head-copy">
+              <p class="eyebrow">Team workspace <span class="eyebrow-divider">/</span> Networked</p>
+              <h1 id="team-title" tabindex="-1">Team workspace</h1>
+              <p class="view-subtitle">Sign in to a shared backend to share insights, review them with a manager, and read the approved playbook. Raw conversations stay private until their owner shares them.</p>
+            </div>
+            <div class="view-actions">
+              <span class="status-chip status-chip-quiet" id="team-status-chip">Server-authoritative</span>
+            </div>
+          </header>
+
+          <div class="inline-alert team-notice" id="team-notice" role="status" hidden></div>
+
+          <div class="team-root" id="team-root"></div>
+        </section>
+      </main>
+    </div>
+
+    <footer class="statusbar">
+      <span><span class="status-light" aria-hidden="true"></span> Finalized-text mode</span>
+      <span>No microphone · No live transcription · No machine translation</span>
+      <span class="statusbar-right"><span id="status-data-dir">Local workspace</span></span>
+    </footer>
+  </div>
+
+  <dialog class="dialog" id="settings-dialog" aria-labelledby="settings-heading">
+    <form class="dialog-card" id="settings-form" novalidate>
+      <div class="dialog-head">
+        <div>
+          <p class="panel-kicker">Workspace</p>
+          <h2 id="settings-heading">Provider and review settings</h2>
+        </div>
+        <button class="icon-button" type="button" data-close-dialog aria-label="Close settings">
+          <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M5 5l10 10M15 5L5 15"></path></svg>
+        </button>
+      </div>
+      <p class="dialog-lede">The demo coach runs offline. A configured OpenAI-compatible endpoint receives only the evidence you explicitly select.</p>
+
+      <fieldset class="mode-picker">
+        <legend>Provider mode</legend>
+        <label class="mode-card">
+          <input type="radio" name="provider_mode" value="mock">
+          <span class="mode-copy">
+            <span class="mode-title">Demo coach <span class="status-chip status-chip-quiet">Offline</span></span>
+            <span class="mode-note">Deterministic rules, no account, no network. Best for evaluating the workflow.</span>
+          </span>
+        </label>
+        <label class="mode-card">
+          <input type="radio" name="provider_mode" value="openai_compatible">
+          <span class="mode-copy">
+            <span class="mode-title">Configured provider <span class="status-chip status-chip-quiet">Network</span></span>
+            <span class="mode-note">An OpenAI-compatible chat-completions endpoint. The API key is read from the environment.</span>
+          </span>
+        </label>
+      </fieldset>
+
+      <div class="settings-grid">
+        <div class="field field-span">
+          <label for="settings-base-url">Base URL</label>
+          <input id="settings-base-url" name="base_url" type="url" maxlength="300" placeholder="https://api.example.com/v1" autocomplete="off">
+          <span class="field-hint">For example https://api.example.com/v1. Never include the key here.</span>
+        </div>
+        <div class="field">
+          <label for="settings-model">Model</label>
+          <input id="settings-model" name="model" type="text" maxlength="140" placeholder="model-name">
+        </div>
+        <div class="field">
+          <label for="settings-timeout">Timeout <span class="label-note">seconds</span></label>
+          <input id="settings-timeout" name="timeout_s" type="number" min="5" max="120" step="1" inputmode="numeric">
+        </div>
+        <div class="field field-span">
+          <label for="settings-reviewer">Reviewer name</label>
+          <input id="settings-reviewer" name="reviewer_name" type="text" maxlength="80" placeholder="Used to attribute playbook approvals" autocomplete="name">
+        </div>
+      </div>
+
+      <div class="key-note">
+        <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M10 2l6 3v4c0 4-2.6 7.4-6 9-3.4-1.6-6-5-6-9V5l6-3z"></path><path d="M7.5 10l1.8 1.8 3.5-4"></path></svg>
+        <p>The API key is read at runtime from <code>CLEARCOMMIT_TEAMS_API_KEY</code>. It is never stored in the workspace database, never returned by the bridge, and never written to logs.</p>
+      </div>
+
+      <div class="settings-status" id="settings-status" aria-live="polite"></div>
+      <div class="inline-alert" id="settings-error" role="alert" hidden></div>
+
+      <div class="dialog-actions">
+        <button class="button button-quiet" type="button" id="test-provider">Test connection</button>
+        <span class="dialog-spacer"></span>
+        <button class="button button-quiet" type="button" data-close-dialog>Cancel</button>
+        <button class="button button-primary" type="submit">Save settings</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="dialog" id="new-session-dialog" aria-labelledby="new-session-heading">
+    <form class="dialog-card" id="new-session-form" novalidate>
+      <div class="dialog-head">
+        <div>
+          <p class="panel-kicker">Conversation desk</p>
+          <h2 id="new-session-heading">New conversation</h2>
+        </div>
+        <button class="icon-button" type="button" data-close-dialog aria-label="Close new conversation dialog">
+          <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M5 5l10 10M15 5L5 15"></path></svg>
+        </button>
+      </div>
+      <p class="dialog-lede">Record the conversation context. Add the finalized transcript next; this build does not capture audio.</p>
+      <div class="settings-grid">
+        <div class="field field-span">
+          <label for="new-title">Conversation title</label>
+          <input id="new-title" name="title" type="text" maxlength="120" required placeholder="Renewal call with Helio">
+        </div>
+        <div class="field">
+          <label for="new-customer">Customer name</label>
+          <input id="new-customer" name="customer_name" type="text" maxlength="120" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="new-company">Company</label>
+          <input id="new-company" name="company" type="text" maxlength="120" autocomplete="organization">
+        </div>
+        <div class="field">
+          <label for="new-rep">Representative</label>
+          <input id="new-rep" name="rep_name" type="text" maxlength="80" value="You">
+        </div>
+        <div class="field">
+          <label for="new-date">Conversation date</label>
+          <input id="new-date" name="occurred_on" type="date">
+        </div>
+        <div class="field">
+          <label for="new-customer-language">Customer language</label>
+          <input id="new-customer-language" name="customer_language" type="text" maxlength="10" value="en" placeholder="en">
+        </div>
+        <div class="field">
+          <label for="new-rep-language">Representative language</label>
+          <input id="new-rep-language" name="rep_language" type="text" maxlength="10" value="en" placeholder="en">
+        </div>
+      </div>
+      <div class="inline-alert" id="new-session-error" role="alert" hidden></div>
+      <div class="dialog-actions">
+        <span class="dialog-spacer"></span>
+        <button class="button button-quiet" type="button" data-close-dialog>Cancel</button>
+        <button class="button button-primary" type="submit">Create conversation</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="dialog" id="import-dialog" aria-labelledby="import-heading">
+    <form class="dialog-card" id="import-form" novalidate>
+      <div class="dialog-head">
+        <div>
+          <p class="panel-kicker">Finalized transcript</p>
+          <h2 id="import-heading">Import transcript</h2>
+        </div>
+        <button class="icon-button" type="button" data-close-dialog aria-label="Close transcript import">
+          <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M5 5l10 10M15 5L5 15"></path></svg>
+        </button>
+      </div>
+      <p class="dialog-lede">Paste a finished transcript. Each line needs a speaker label. Timestamp, language and translation are optional.</p>
+      <div class="format-note">
+        <code>[00:42] Customer (es): Hola, el precio nos preocupa =&gt; Hello, the price concerns us</code>
+        <code>Rep: I understand.</code>
+      </div>
+      <div class="field">
+        <label for="import-text">Transcript lines</label>
+        <textarea id="import-text" rows="12" maxlength="80000" placeholder="[00:04] Customer (es): …" required></textarea>
+        <span class="field-hint">Blank lines and lines starting with # are ignored. Maximum 400 lines per import.</span>
+      </div>
+      <div class="inline-alert" id="import-error" role="alert" hidden></div>
+      <div class="dialog-actions">
+        <span class="dialog-spacer"></span>
+        <button class="button button-quiet" type="button" data-close-dialog>Cancel</button>
+        <button class="button button-primary" type="submit">Import lines</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="dialog dialog-small" id="add-line-dialog" aria-labelledby="add-line-heading">
+    <form class="dialog-card" id="add-line-form" novalidate>
+      <div class="dialog-head">
+        <div>
+          <p class="panel-kicker">Finalized transcript</p>
+          <h2 id="add-line-heading">Add one line</h2>
+        </div>
+        <button class="icon-button" type="button" data-close-dialog aria-label="Close add line dialog">
+          <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M5 5l10 10M15 5L5 15"></path></svg>
+        </button>
+      </div>
+      <div class="settings-grid">
+        <div class="field">
+          <label for="line-speaker">Speaker</label>
+          <select id="line-speaker" name="speaker">
+            <option value="customer">Customer</option>
+            <option value="rep">Representative</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="line-time">Timestamp <span class="label-note">optional</span></label>
+          <input id="line-time" name="display_time" type="text" maxlength="8" placeholder="00:42" inputmode="numeric">
+        </div>
+        <div class="field field-span">
+          <label for="line-original">Original words</label>
+          <textarea id="line-original" name="original_text" rows="4" maxlength="4000" required></textarea>
+        </div>
+        <div class="field field-span">
+          <label for="line-translation">Translation <span class="label-note">optional</span></label>
+          <textarea id="line-translation" name="translation" rows="3" maxlength="4000"></textarea>
+        </div>
+        <div class="field">
+          <label for="line-language">Language</label>
+          <input id="line-language" name="language" type="text" maxlength="10" value="en" placeholder="en">
+        </div>
+      </div>
+      <div class="inline-alert" id="add-line-error" role="alert" hidden></div>
+      <div class="dialog-actions">
+        <span class="dialog-spacer"></span>
+        <button class="button button-quiet" type="button" data-close-dialog>Cancel</button>
+        <button class="button button-primary" type="submit">Add to transcript</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div class="toast-region" id="toast-region" aria-live="polite" aria-atomic="false"></div>
+
+  <script src="js/bridge.js" defer></script>
+  <script src="js/net.js" defer></script>
+  <script src="js/app.js" defer></script>
+  <script src="js/team.js" defer></script>
+</body>
+</html>

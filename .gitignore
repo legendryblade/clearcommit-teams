@@ -16,6 +16,7 @@ htmlcov/
 # Runtime data (local workspace database + artifacts)
 data/*
 !data/.gitkeep
+server_data/
 *.db
 *.db-wal
 *.db-shm

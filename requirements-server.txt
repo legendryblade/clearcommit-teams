@@ -1,0 +1,10 @@
+﻿# ClearCommit Teams backend (FastAPI service)
+fastapi==0.162.0
+uvicorn[standard]==0.54.0
+sqlalchemy==2.1.6
+pyjwt==2.15.1
+cryptography==50.0.2
+httpx==0.28.1
+email-validator
+# PostgreSQL (Supabase) connections; not needed for demo mode
+psycopg[binary]==3.3.6

@@ -3144,3 +3144,171 @@ body[data-busy="true"] .status-light {
 @media (max-width: 980px) {
   .team-form.team-inline { grid-template-columns: 1fr; }
 }
+
+/* ---------------------------------------------------------------------------
+   First-run onboarding: Individual vs Company
+--------------------------------------------------------------------------- */
+
+.dialog.onboarding .dialog-card {
+  max-width: 760px;
+  width: min(760px, 92vw);
+}
+
+.onboarding-intro {
+  margin: 0 0 16px;
+  color: var(--ink-soft);
+  font-size: 14.5px;
+  line-height: 1.55;
+  max-width: 62ch;
+}
+
+.onboarding-choices {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+.onboarding-choice {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+  text-align: left;
+  padding: 18px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--card);
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  transition: border-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+}
+
+.onboarding-choice:hover {
+  border-color: var(--teal);
+  box-shadow: var(--shadow-card);
+  transform: translateY(-1px);
+}
+
+.onboarding-choice:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.onboarding-choice-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.onboarding-badge {
+  padding: 2px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--teal);
+  background: var(--teal-soft);
+  color: var(--teal);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.onboarding-badge-team {
+  border-color: var(--gold);
+  background: var(--gold-soft);
+  color: var(--gold);
+}
+
+.onboarding-title {
+  font-family: var(--font-display);
+  font-size: 17px;
+  color: var(--ink);
+}
+
+.onboarding-body {
+  color: var(--ink-soft);
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+.onboarding-points {
+  display: grid;
+  gap: 4px;
+  font-size: 12.5px;
+  color: var(--ink-faint);
+}
+
+.onboarding-points span::before {
+  content: "";
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin-right: 8px;
+  border-radius: 50%;
+  background: var(--line-strong);
+  vertical-align: middle;
+}
+
+.onboarding-note {
+  margin: 16px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  color: var(--ink-faint);
+  font-size: 12.5px;
+}
+
+/* Mode indicator in the rail */
+.mode-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  font-size: 10.5px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  cursor: pointer;
+  background: transparent;
+  font-family: inherit;
+}
+
+.mode-chip:hover { border-color: var(--teal); color: var(--teal); }
+.mode-chip[data-mode="company"] { border-color: var(--gold); color: var(--gold); }
+
+/* Company overview: real counts only, no invented analytics */
+.team-overview { grid-column: 1 / -1; }
+
+.team-stats {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  margin: 4px 0 2px;
+}
+
+.team-stat {
+  display: grid;
+  gap: 2px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-small);
+  background: var(--card);
+}
+
+.team-stat.is-attention { border-color: var(--gold); background: var(--gold-soft); }
+
+.team-stat-value {
+  font-family: var(--font-display);
+  font-size: 24px;
+  line-height: 1.1;
+  color: var(--ink);
+}
+
+.team-stat-label {
+  font-size: 11.5px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.team-overview-list { margin-top: 4px; }

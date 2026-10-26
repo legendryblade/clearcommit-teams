@@ -58,6 +58,7 @@
     sessionFilter: "",
     busy: false,
     booted: false,
+    mode: null,
   };
 
   const ui = {};
@@ -190,6 +191,7 @@
     viewTeam: "view-team",
     signalsTitle: "signals-title",
     teamTitle: "team-title",
+    modeChip: "mode-chip",
   };
 
   Object.keys(UI_IDS).forEach(function (key) {
@@ -1737,6 +1739,89 @@
     }
   }
 
+  const MODE_KEY = "clearcommit.teams.mode";
+
+  function readMode() {
+    try {
+      const stored = localStorage.getItem(MODE_KEY);
+      return stored === "company" || stored === "individual" ? stored : null;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function writeMode(mode) {
+    try {
+      localStorage.setItem(MODE_KEY, mode);
+    } catch (error) {
+      /* storage unavailable: the choice simply isn't remembered */
+    }
+  }
+
+  function applyMode(mode) {
+    state.mode = mode;
+    if (ui.modeChip) {
+      ui.modeChip.dataset.mode = mode;
+      ui.modeChip.textContent = mode === "company" ? "Company" : "Individual";
+      ui.modeChip.title =
+        mode === "company"
+          ? "Using ClearCommit with a team. Click to change."
+          : "Using ClearCommit on your own. Click to change.";
+    }
+  }
+
+  function openOnboarding() {
+    const dialog = document.getElementById("onboarding-dialog");
+    if (!dialog) return;
+    const note = document.getElementById("onboarding-note");
+    if (note) {
+      note.textContent =
+        "Personal conversations stay in this workspace unless you explicitly share one. " +
+        "Joining a team later does not move them.";
+    }
+    if (typeof dialog.showModal === "function") dialog.showModal();
+    else dialog.setAttribute("open", "");
+  }
+
+  function closeOnboarding() {
+    const dialog = document.getElementById("onboarding-dialog");
+    if (!dialog) return;
+    if (typeof dialog.close === "function") dialog.close();
+    else dialog.removeAttribute("open");
+  }
+
+  function chooseMode(mode) {
+    writeMode(mode);
+    applyMode(mode);
+    closeOnboarding();
+    if (mode === "company") {
+      setView("team");
+      if (window.ClearCommitTeamView) window.ClearCommitTeamView.refresh();
+    } else {
+      setView("desk");
+    }
+  }
+
+  function initOnboarding() {
+    const individual = document.getElementById("choose-individual");
+    const company = document.getElementById("choose-company");
+    if (individual) {
+      individual.addEventListener("click", function () {
+        chooseMode("individual");
+      });
+    }
+    if (company) {
+      company.addEventListener("click", function () {
+        chooseMode("company");
+      });
+    }
+    if (ui.modeChip) {
+      ui.modeChip.addEventListener("click", function () {
+        openOnboarding();
+      });
+    }
+  }
+
   async function boot() {
     ui.bootRetry.hidden = true;
     ui.bootMessage.textContent = "Opening your local workspace…";
@@ -1767,6 +1852,14 @@
       ui.appShell.hidden = false;
       setView("desk", { focus: false });
       updateNavBadges();
+      const savedMode = readMode();
+      if (savedMode) {
+        applyMode(savedMode);
+        if (savedMode === "company") setView("team", { focus: false });
+      } else {
+        applyMode("individual");
+        openOnboarding();
+      }
       if (
         state.provider &&
         state.provider.mode === "openai_compatible" &&
@@ -1905,6 +1998,7 @@
     });
     renderSelection();
     renderAssistantNotes();
+    initOnboarding();
     void boot();
   }
 

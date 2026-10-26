@@ -829,6 +829,70 @@
     return card;
   }
 
+  function renderOverview() {
+    const card = el("div", "team-card team-overview");
+    card.append(el("h3", "team-card-title", "Overview"));
+    card.append(
+      el(
+        "p",
+        "team-card-note",
+        canReview()
+          ? "What your team has shared, and what is waiting on a decision."
+          : "What you have shared with the team."
+      )
+    );
+
+    const drafts = state.playbook.filter(function (entry) { return entry.status === "draft"; });
+    const approved = state.playbook.filter(function (entry) { return entry.status === "approved"; });
+    const myShared = state.myInsights.filter(function (i) { return i.visibility === "shared"; });
+
+    const stats = el("div", "team-stats");
+    function stat(value, label, tone) {
+      const box = el("div", "team-stat" + (tone ? " is-" + tone : ""));
+      box.append(el("span", "team-stat-value", String(value)));
+      box.append(el("span", "team-stat-label", label));
+      return box;
+    }
+    stats.append(stat(state.members.length, state.members.length === 1 ? "member" : "members"));
+    stats.append(stat(state.sharedInsights.length, "shared insights"));
+    stats.append(stat(drafts.length, "awaiting review", drafts.length ? "attention" : null));
+    stats.append(stat(approved.length, "approved guidance"));
+    card.append(stats);
+
+    if (canReview() && drafts.length) {
+      const list = el("div", "team-list team-overview-list");
+      drafts.slice(0, 4).forEach(function (entry) {
+        const row = el("div", "team-row is-draft");
+        row.append(el("span", "team-row-title", entry.title));
+        row.append(el("span", "team-row-meta", "Draft by " + (entry.author_name || "a teammate")));
+        row.append(button("Approve", "button-primary", function () {
+          void approveEntry(entry.entry_id);
+        }));
+        list.append(row);
+      });
+      card.append(list);
+      if (drafts.length > 4) {
+        card.append(el("p", "team-scope-note", (drafts.length - 4) + " more draft entries below."));
+      }
+    } else if (canReview()) {
+      card.append(el("p", "team-scope-note", "No entries are waiting for review."));
+    } else if (myShared.length) {
+      card.append(
+        el("p", "team-scope-note",
+          myShared.length + (myShared.length === 1 ? " insight is" : " insights are") + " visible to your team.")
+      );
+    } else {
+      card.append(
+        el("p", "team-scope-note", "You have not shared any insights yet. Sharing is always your choice.")
+      );
+    }
+
+    if (!state.members.length) {
+      card.append(el("p", "team-scope-note", "Select an organization to see its team."));
+    }
+    return card;
+  }
+
   function renderSignedIn() {
     const header = el("div", "team-header");
     const who = el("div", "team-who");
@@ -841,7 +905,14 @@
     }));
 
     const grid = el("div", "team-grid");
-    grid.append(renderOrgPicker(), renderConversations(), renderInsights(), renderPlaybook(), renderTeam());
+    grid.append(
+      renderOverview(),
+      renderOrgPicker(),
+      renderConversations(),
+      renderInsights(),
+      renderPlaybook(),
+      renderTeam()
+    );
     return [header, grid];
   }
 

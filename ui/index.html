@@ -128,7 +128,7 @@
         <div class="rail-footer">
           <div class="rail-rule" aria-hidden="true"></div>
           <p class="rail-motto">Every insight carries a quote.</p>
-          <p class="rail-meta"><span id="rail-build">CLEARCOMMIT TEAMS 0.2.0</span><span>Local + team</span></p>
+          <p class="rail-meta"><span id="rail-build">CLEARCOMMIT TEAMS 0.2.0</span><button class="mode-chip" type="button" id="mode-chip" data-mode="individual" title="Change how you are using ClearCommit">Individual</button></p>
         </div>
       </aside>
 
@@ -497,6 +497,59 @@
       <span class="statusbar-right"><span id="status-data-dir">Local workspace</span></span>
     </footer>
   </div>
+
+  <dialog class="dialog onboarding" id="onboarding-dialog" aria-labelledby="onboarding-heading">
+    <div class="dialog-card">
+      <div class="dialog-head">
+        <div>
+          <p class="panel-kicker">Get started</p>
+          <h2 id="onboarding-heading">How will you use ClearCommit?</h2>
+        </div>
+      </div>
+      <p class="onboarding-intro">
+        Both options use the same coaching and report tools. You can add a team later without moving
+        your personal conversations into it.
+      </p>
+
+      <div class="onboarding-choices" role="group" aria-label="Choose how to use ClearCommit">
+        <button class="onboarding-choice" type="button" id="choose-individual">
+          <span class="onboarding-choice-head">
+            <span class="onboarding-badge">Individual</span>
+            <span class="onboarding-title">Use it on my own</span>
+          </span>
+          <span class="onboarding-body">
+            A private personal workspace on this computer. Import a transcript, get evidence-linked
+            coaching, and keep your reports to yourself.
+          </span>
+          <span class="onboarding-points">
+            <span>No organization required</span>
+            <span>Conversations stay private by default</span>
+            <span>Works offline</span>
+          </span>
+        </button>
+
+        <button class="onboarding-choice" type="button" id="choose-company">
+          <span class="onboarding-choice-head">
+            <span class="onboarding-badge onboarding-badge-team">Company</span>
+            <span class="onboarding-title">Work with my team</span>
+          </span>
+          <span class="onboarding-body">
+            Create an organization or join one with an invitation, then share selected reports with
+            teammates and review the team playbook.
+          </span>
+          <span class="onboarding-points">
+            <span>Sign in with your own account</span>
+            <span>Share only what you choose</span>
+            <span>Managers see shared reports, not private notes</span>
+          </span>
+        </button>
+      </div>
+
+      <p class="onboarding-note" id="onboarding-note">
+        Personal conversations stay in this workspace unless you explicitly share one.
+      </p>
+    </div>
+  </dialog>
 
   <dialog class="dialog" id="settings-dialog" aria-labelledby="settings-heading">
     <form class="dialog-card" id="settings-form" novalidate>

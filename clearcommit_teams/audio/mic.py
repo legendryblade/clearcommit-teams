@@ -1,4 +1,4 @@
-"""Low-latency microphone capture with lightweight VAD.
+﻿"""Low-latency microphone capture with lightweight VAD.
 
 Groq's Whisper API is file-based (no streaming/WebSocket STT). To keep the
 pipeline's latency low we capture audio in small 20 ms PCM chunks and detect
@@ -22,7 +22,7 @@ class MicCapture:
         self,
         rate: int = 16000,
         chunk_ms: int = 20,
-        vad_threshold: float = 0.012,
+    vad_threshold: float = 0.004,
         silence_timeout: float = 0.7,
         max_utterance_s: float = 15.0,
         device: Optional[int] = None,

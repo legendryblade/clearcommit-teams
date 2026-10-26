@@ -97,6 +97,12 @@
     captureLive: "capture-live",
     captureLiveText: "capture-live-text",
     captureSegments: "capture-segments",
+    interpretBlock: "interpret-block",
+    interpretTarget: "interpret-target",
+    interpretDevice: "interpret-device",
+    interpretSpeak: "interpret-speak",
+    interpretNote: "interpret-note",
+    interpretOutput: "interpret-output",
     transcriptList: "transcript-list",
     transcriptEmpty: "transcript-empty",
     selectionCount: "selection-count",
@@ -1944,6 +1950,64 @@
       select.value = previous;
     }
   }
+  async function initInterpretation() {
+    if (!ui.interpretBlock) return;
+    try {
+      const status = await bridge.call("interpret_status");
+      if (!status.translation.configured) {
+        ui.interpretBlock.hidden = true;
+        return;
+      }
+      ui.interpretBlock.hidden = false;
+      clear(ui.interpretTarget);
+      (status.languages || []).forEach(function (lang) {
+        if (lang.code === "en") return;
+        const opt = el("option", null, lang.name);
+        opt.value = lang.code;
+        ui.interpretTarget.append(opt);
+      });
+      fillDeviceList(ui.interpretDevice, status.outputs, "No output device");
+      const cable = (status.outputs || []).find(function (d) {
+        return /cable|virtual|vb-audio/i.test(d.name);
+      });
+      if (cable) ui.interpretDevice.value = String(cable.index);
+      if (!status.speech.configured) {
+        ui.interpretSpeak.checked = false;
+        ui.interpretSpeak.disabled = true;
+        ui.interpretNote.textContent =
+          "Translation is available. Voice playback needs ELEVENLABS_API_KEY or GROQ_API_KEY.";
+      }
+    } catch (error) {
+      ui.interpretBlock.hidden = true;
+    }
+  }
+
+  async function interpretTurn(text) {
+    if (!ui.interpretBlock || ui.interpretBlock.hidden) return;
+    if (!text || !text.trim()) return;
+    const target = ui.interpretTarget.value;
+    if (!target) return;
+    try {
+      const result = await bridge.call("interpret", {
+        text: text.trim(),
+        target: target,
+        speak: Boolean(ui.interpretSpeak.checked && !ui.interpretSpeak.disabled),
+        device: ui.interpretDevice.value === "" ? null : Number(ui.interpretDevice.value),
+      });
+      const item = el("li", "capture-segment");
+      item.append(el("span", "capture-speaker", "You \u2192 " + (result.target_name || target)));
+      item.append(document.createTextNode(result.translated_text));
+      if (result.spoken) {
+        item.append(el("span", "interpret-spoken", "spoken"));
+      }
+      ui.interpretOutput.append(item);
+    } catch (error) {
+      const item = el("li", "capture-segment is-error");
+      item.textContent = "Translation failed: " + describeError(error);
+      ui.interpretOutput.append(item);
+    }
+  }
+
   async function toggleCapture() {
     if (capture.active) {
       await stopCapture();
@@ -1997,6 +2061,11 @@
       const provider = ui.captureProvider ? ui.captureProvider.value : "groq";
       const result = await bridge.call("audio_poll", { provider: provider });
       const turns = result.turns || [];
+      // Translate only the user's own speech: the caller's audio is already
+      // in their language and should not be echoed back to them.
+      turns.filter(function (t) { return t.speaker === "rep"; }).forEach(function (t) {
+        void interpretTurn(t.text);
+      });
       if (turns.length) {
         turns.forEach(function (turn) {
           capture.buffer.push(turn);
@@ -2398,6 +2467,7 @@
     renderAssistantNotes();
     initOnboarding();
     void initCapture();
+    void initInterpretation();
     if (ui.captureSource) {
       ui.captureSource.addEventListener("change", function () {
         void refreshCaptureDevices();

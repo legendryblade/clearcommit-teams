@@ -59,6 +59,8 @@ PUBLIC_METHODS = (
     "test_provider",
     "refresh_preview",
     "use_workspace",
+    "interpret_status",
+    "interpret",
     "audio_status",
     "audio_devices",
     "audio_start",
@@ -388,6 +390,55 @@ class Bridge:
                 for row in lines
                 if (row.get("original_text") or row.get("text"))
             ],
+        }
+
+    # ---- Interpretation: translate + speak (opt-in) ---- #
+    def interpret_status(self, payload: Any = None) -> dict:
+        return self._execute("interpret_status", self._interpret_status, payload)
+
+    def _interpret_status(self, _payload: Mapping[str, Any]) -> dict:
+        from .audio import interpret
+
+        data = interpret.status()
+        data["outputs"] = [
+            {"index": idx, "name": name} for idx, name in interpret.output_devices()
+        ]
+        return data
+
+    def interpret(self, payload: Any = None) -> dict:
+        return self._execute("interpret", self._interpret, payload)
+
+    def _interpret(self, payload: Mapping[str, Any]) -> dict:
+        """Translate text and optionally speak it out of a chosen device."""
+        from .audio import interpret
+
+        text = str(payload.get("text") or "")
+        target = str(payload.get("target") or "ur").strip().lower()
+        source = str(payload.get("source") or "").strip().lower() or None
+        speak = bool(payload.get("speak"))
+        device = payload.get("device")
+        if device is not None:
+            try:
+                device = int(device)
+            except (TypeError, ValueError) as exc:
+                raise ValidationError("The output device must be an index.") from exc
+
+        result = interpret.translate(text, target, source)
+        spoken = False
+        duration = None
+        if speak:
+            audio = interpret.synthesise(result.text, target)
+            data, rate = interpret._decode_audio(audio)
+            duration = round(len(data) / float(rate or 1), 2)
+            interpret.speak_to_device(audio, device)
+            spoken = True
+        return {
+            "source_text": text,
+            "translated_text": result.text,
+            "target": result.target,
+            "target_name": result.target_name,
+            "spoken": spoken,
+            "audio_seconds": duration,
         }
 
     # ---- Audio capture (opt-in; nothing starts automatically) ---- #

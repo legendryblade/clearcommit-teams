@@ -203,3 +203,68 @@ def test_inactive_session_reports_not_active() -> None:
     bridge._capture = None
     result = bridge._audio_poll({"provider": "groq"})
     assert result["active"] is False
+
+# --- interpretation -------------------------------------------------------
+
+def test_interpretation_status_reports_capability_without_keys(monkeypatch) -> None:
+    from clearcommit_teams.audio import interpret
+
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    monkeypatch.delenv("ELEVENLABS_API_KEY", raising=False)
+    state = interpret.status()
+    assert state["translation"]["configured"] is False
+    assert state["speech"]["configured"] is False
+    assert len(state["languages"]) >= 5
+    assert "GROQ_API_KEY" in state["translation"]["detail"]
+
+
+def test_interpretation_status_never_leaks_keys(monkeypatch) -> None:
+    from clearcommit_teams.audio import interpret
+
+    monkeypatch.setenv("GROQ_API_KEY", "sk-groq-secret-value")
+    monkeypatch.setenv("ELEVENLABS_API_KEY", "el-secret-value")
+    state = interpret.status()
+    blob = str(state)
+    assert "sk-groq-secret-value" not in blob
+    assert "el-secret-value" not in blob
+
+
+def test_translate_rejects_empty_text() -> None:
+    from clearcommit_teams.audio import interpret
+
+    try:
+        interpret.translate("   ", "ur")
+    except interpret.InterpretationError as exc:
+        assert exc.code == "empty_text"
+    else:
+        raise AssertionError("empty text must be refused")
+
+
+def test_translate_rejects_unknown_language() -> None:
+    from clearcommit_teams.audio import interpret
+
+    try:
+        interpret.translate("hello", "klingon")
+    except interpret.InterpretationError as exc:
+        assert exc.code == "bad_language"
+    else:
+        raise AssertionError("an unsupported language must be refused")
+
+
+def test_translate_requires_a_key(monkeypatch) -> None:
+    from clearcommit_teams.audio import interpret
+
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    try:
+        interpret.translate("hello", "ur")
+    except interpret.InterpretationError as exc:
+        assert exc.code == "provider_not_configured"
+    else:
+        raise AssertionError("translation without a key must be refused")
+
+
+def test_language_names_cover_the_ui_list() -> None:
+    from clearcommit_teams.audio import interpret
+
+    for code, name in interpret.SUPPORTED_LANGUAGES:
+        assert interpret.language_name(code) == name

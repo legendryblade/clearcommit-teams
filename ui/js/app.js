@@ -2035,9 +2035,29 @@
         );
       }
     } catch (error) {
+      if (!isDesktopShell()) {
+        // A browser can reach the team workspace but has no desktop bridge and
+        // therefore no local workspace. Say that plainly instead of reporting
+        // a confusing protocol error.
+        ui.bootMessage.textContent =
+          "This page is the web build. The personal workspace runs in the Windows app — " +
+          "sign in to the team workspace to continue here.";
+        ui.bootRetry.hidden = true;
+        ui.bootScreen.hidden = true;
+        ui.appShell.hidden = false;
+        applyMode("company");
+        setView("team", { focus: false });
+        if (window.ClearCommitTeamView) window.ClearCommitTeamView.refresh();
+        return;
+      }
       ui.bootMessage.textContent = errorTitle(error) + ": " + describeError(error);
       ui.bootRetry.hidden = false;
     }
+  }
+
+  function isDesktopShell() {
+    const host = window.location.hostname;
+    return Boolean(window.pywebview) || host === "localhost" || host === "127.0.0.1";
   }
 
   function handleAction(action) {

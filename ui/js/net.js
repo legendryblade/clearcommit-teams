@@ -21,8 +21,14 @@
 
   function configuredDefault() {
     const injected = typeof window !== "undefined" ? window.CLEARCOMMIT_API_BASE : null;
-    if (injected && String(injected).trim()) return String(injected).trim().replace(/\/+$/, "");
-    return DEV_DEFAULT;
+    if (injected && String(injected).trim()) {
+      return String(injected).trim().replace(/\/+$/, "");
+    }
+    // A hosted page must never fall back to a loopback API, which would point
+    // every visitor at their own computer and look like a broken product.
+    const host = typeof window !== "undefined" ? window.location.hostname : "";
+    const local = !host || host === "localhost" || host === "127.0.0.1";
+    return local ? DEV_DEFAULT : "";
   }
 
   function serverUrl() {
@@ -56,11 +62,18 @@
   }
 
   async function call(method, path, body) {
+    const base = serverUrl();
+    if (!base) {
+      throw httpError(
+        "not_configured",
+        "This build has no team server configured. Set window.CLEARCOMMIT_API_BASE to the API origin."
+      );
+    }
     const headers = { "Content-Type": "application/json" };
     if (token()) headers.Authorization = "Bearer " + token();
     let response;
     try {
-      response = await fetch(serverUrl() + path, {
+      response = await fetch(base + path, {
         method: method,
         headers: headers,
         body: body === undefined ? undefined : JSON.stringify(body),
@@ -90,8 +103,10 @@
   }
 
   async function health() {
+    const base = serverUrl();
+    if (!base) return false;
     try {
-      const response = await fetch(serverUrl() + "/health", { method: "GET" });
+      const response = await fetch(base + "/health", { method: "GET" });
       return response.ok;
     } catch (cause) {
       return false;
@@ -103,8 +118,10 @@
    * Returns "demo" or "supabase" (from /ready), or null when unreachable.
    */
   async function authMode() {
+    const base = serverUrl();
+    if (!base) return null;
     try {
-      const response = await fetch(serverUrl() + "/ready", { method: "GET" });
+      const response = await fetch(base + "/ready", { method: "GET" });
       if (!response.ok) return null;
       const payload = await response.json();
       if (!payload || payload.ok !== true) return null;
@@ -218,8 +235,10 @@
     const local = supabaseLocation();
     if (local.url && local.anonKey) return local;
     // Fall back to values the backend can safely expose (URL + public anon key).
+    const base = serverUrl();
+    if (!base) return { url: "", anonKey: "" };
     try {
-      const response = await fetch(serverUrl() + "/api/auth/config", { method: "GET" });
+      const response = await fetch(base + "/api/auth/config", { method: "GET" });
       if (response.ok) {
         const payload = await response.json();
         if (payload && payload.ok === true) {

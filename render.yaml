@@ -1,0 +1,33 @@
+# Render Blueprint for the ClearCommit Teams API.
+#
+# Import this repo in Render as a Blueprint and the service is created from
+# this file. Secrets are not stored here: sync: false means Render prompts for
+# the value at creation, so nothing private lands in git.
+#
+# The site already deployed on Vercel calls this service. The database is
+# Supabase PostgreSQL; the container keeps no state of its own.
+
+services:
+  - type: web
+    name: clearcommit-teams-api
+    runtime: docker
+    plan: free
+    region: virginia
+    branch: master
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: CLEARCOMMIT_SUPABASE_URL
+        sync: false
+      - key: CLEARCOMMIT_SUPABASE_ANON_KEY
+        sync: false
+      - key: CLEARCOMMIT_SUPABASE_JWKS_URL
+        sync: false
+      - key: CLEARCOMMIT_DATABASE_URL
+        sync: false
+      - key: CLEARCOMMIT_ALLOWED_ORIGINS
+        value: https://ui-five-blue.vercel.app
+      - key: CLEARCOMMIT_SERVER_HOST
+        value: 0.0.0.0

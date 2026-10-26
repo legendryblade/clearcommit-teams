@@ -35,6 +35,7 @@
     sessionGeneration: 0,
     localWorkspaceKey: null,
     pendingInvitations: [],
+    tab: "overview",
   };
 
   let socket = null;
@@ -101,6 +102,7 @@
     if (!net.signedIn()) {
       state.me = null;
       render();
+      renderJoinCard();
       return;
     }
     // Guard against a refresh started under a previous session resolving after
@@ -123,6 +125,7 @@
       }
       announce("", null);
       render();
+      renderJoinCard();
       if (window.ClearCommitSyncStateChanged) window.ClearCommitSyncStateChanged();
     } catch (error) {
       if (generation !== state.sessionGeneration) return;
@@ -1137,21 +1140,99 @@
     return bar;
   }
 
-  function renderSignedIn() {
-    const grid = el("div", "team-grid");
-    if (!state.organizations.length) {
-      grid.append(renderOrgPicker());
+  // Sections rather than one flat grid: identity, then what needs attention,
+  // then the team's material. Each block has its own heading so the page has
+  // a hierarchy instead of a single column of cards.
+  function section(title, note, cards) {
+    const wrap = el("section", "team-section");
+    const head = el("div", "team-section-head");
+    const titles = el("div", "team-section-titles");
+    titles.append(el("h2", "team-section-title", title));
+    if (note) titles.append(el("p", "team-section-note", note));
+    head.append(titles);
+    wrap.append(head);
+    const body = el("div", "team-section-body");
+    cards.forEach(function (card) { if (card) body.append(card); });
+    wrap.append(body);
+    return wrap;
+  }
+
+  // Tabs, not one long scroll: each area of the product gets its own view.
+  const TEAM_TABS = [
+    { id: "overview", label: "Overview" },
+    { id: "calls", label: "Calls" },
+    { id: "insights", label: "Insights" },
+    { id: "playbook", label: "Playbook" },
+    { id: "team", label: "Team" },
+    { id: "settings", label: "Settings" },
+  ];
+
+  function setTab(id) {
+    state.tab = id;
+    render();
+  }
+
+  function renderTabs() {
+    const nav = el("nav", "team-tabs");
+    nav.setAttribute("role", "tablist");
+    TEAM_TABS.forEach(function (tab) {
+      const active = (state.tab || "overview") === tab.id;
+      const button = el("button", "team-tab" + (active ? " is-active" : ""), tab.label);
+      button.type = "button";
+      button.setAttribute("role", "tab");
+      button.setAttribute("aria-selected", active ? "true" : "false");
+      if (tab.id === "playbook") {
+        const drafts = (state.playbook || []).filter(function (e) { return e.status === "draft"; }).length;
+        if (drafts) button.append(el("span", "team-tab-badge", String(drafts)));
+      }
+      button.addEventListener("click", function () { setTab(tab.id); });
+      nav.append(button);
+    });
+    return nav;
+  }
+
+  function renderTabBody() {
+    const tab = state.tab || "overview";
+    const wrap = el("div", "team-panel");
+    wrap.setAttribute("role", "tabpanel");
+    if (tab === "overview") {
+      wrap.append(renderOverview(), renderOrgPicker());
+    } else if (tab === "calls") {
+      wrap.append(renderConversations());
+    } else if (tab === "insights") {
+      wrap.append(renderInsights());
+    } else if (tab === "playbook") {
+      wrap.append(renderPlaybook());
+    } else if (tab === "team") {
+      wrap.append(renderTeam());
     } else {
-      grid.append(
-        renderOrgPicker(),
-        renderOverview(),
-        renderConversations(),
-        renderInsights(),
-        renderPlaybook(),
-        renderTeam()
-      );
+      wrap.append(renderOrgPicker(), renderTeam());
     }
-    return [renderProfileBar(), grid];
+    return wrap;
+  }
+
+  function renderSignedIn() {
+    const parts = [renderProfileBar()];
+    if (!state.organizations.length) {
+      parts.push(
+        section(
+          "Get started",
+          "Create a company, or join one with the code your manager gave you.",
+          [renderOrgPicker()]
+        )
+      );
+      return parts;
+    }
+    parts.push(renderTabs());
+    const org = activeOrg();
+    parts.push(
+      section(
+        (TEAM_TABS.find(function (t) { return t.id === (state.tab || "overview"); }) || {}).label || "Overview",
+        org ? org.name : null,
+        [renderTabBody()]
+      )
+    );
+    return parts;
   }
   function render() {
     if (!dom.root) return;

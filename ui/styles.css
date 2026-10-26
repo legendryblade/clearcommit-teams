@@ -3523,3 +3523,65 @@ body.is-web .rail-conversations {
 .session-row:focus-within .session-menu { opacity: 1; }
 .mini-button.is-danger { color: var(--red); }
 .mini-button.is-danger:hover { border-color: var(--red); background: var(--signal-soft); }
+
+/* Page hierarchy: labelled sections instead of one undifferentiated grid */
+.team-section { margin-bottom: 22px; }
+.team-section-head { margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+.team-section-titles { display: grid; gap: 2px; }
+.team-section-title {
+  font-family: var(--font-display);
+  font-size: 17px;
+  color: var(--ink);
+  letter-spacing: 0.01em;
+}
+.team-section-note { margin: 0; color: var(--ink-faint); font-size: 12.5px; }
+
+.team-section-body {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  align-items: start;
+}
+/* Overview and members read better full width. */
+.team-section-body > .team-overview { grid-column: 1 / -1; }
+
+/* Team tabs */
+.team-tabs {
+  display: flex;
+  gap: 2px;
+  flex-wrap: wrap;
+  margin: -6px 0 18px;
+  border-bottom: 1px solid var(--line);
+}
+.team-tab {
+  position: relative;
+  padding: 9px 14px 10px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 13.5px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.team-tab:hover { color: var(--ink); background: var(--paper-deep); }
+.team-tab.is-active {
+  color: var(--ink);
+  border-bottom-color: var(--teal);
+  font-weight: 600;
+}
+.team-tab-badge {
+  min-width: 17px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--gold);
+  color: #fff;
+  font-size: 10.5px;
+  line-height: 17px;
+  text-align: center;
+}
+.team-panel { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+.team-panel > .team-card { min-width: 0; }

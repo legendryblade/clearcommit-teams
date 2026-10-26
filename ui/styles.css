@@ -3585,3 +3585,19 @@ body.is-web .rail-conversations {
 }
 .team-panel { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
 .team-panel > .team-card { min-width: 0; }
+
+/* Calls tab: grouped by the person who owns them */
+.team-calls { grid-column: 1 / -1; }
+.calls-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.calls-total {
+  padding: 2px 9px; border-radius: 999px; border: 1px solid var(--line-strong);
+  font-size: 11px; color: var(--ink-soft); letter-spacing: 0.04em;
+}
+.calls-group { display: grid; gap: 8px; padding-top: 12px; border-top: 1px solid var(--line); }
+.calls-group:first-of-type { border-top: 0; padding-top: 4px; }
+.calls-group-head { display: flex; align-items: center; gap: 10px; }
+.calls-who { display: flex; align-items: center; gap: 10px; }
+.calls-who-copy { display: grid; gap: 1px; }
+.calls-name { font-weight: 650; color: var(--ink); font-size: 14px; }
+.calls-summary { color: var(--ink-faint); font-size: 12px; }
+.profile-avatar.is-small { width: 30px; height: 30px; font-size: 11.5px; }

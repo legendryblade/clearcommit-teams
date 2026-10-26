@@ -2275,7 +2275,7 @@
       }
       await syncCurrentConversationToCloud();
       showGlobalAlert(
-        "Saved to the cloud. It is private to your account until you share it.",
+        "Conversation shared with your team. It now appears under Calls on the web.",
         "ok"
       );
     } catch (error) {

@@ -852,27 +852,93 @@
     return card;
   }
 
-  function renderConversations() {
-    const card = el("div", "team-card");
-    card.append(el("h3", "team-card-title", "Conversations (private until shared)"));
-    if (!state.conversations.length) {
-      card.append(el("p", "team-card-note", "No conversations in this organization yet."));
-    }
-    const list = el("div", "team-list");
+  // Calls grouped by the person who owns them. Facts only: how many calls,
+  // how many lines, whether each is shared. No scores, no rankings.
+  function callsByOwner() {
+    const groups = new Map();
     state.conversations.forEach(function (conversation) {
-      const row = el("div", "team-row");
-      row.append(el("span", "team-row-title", conversation.title));
-      row.append(
+      const key = conversation.owner_id || "unknown";
+      if (!groups.has(key)) {
+        groups.set(key, {
+          ownerId: key,
+          name: conversation.owner_name || (conversation.is_mine ? "You" : "Teammate"),
+          isMine: Boolean(conversation.is_mine),
+          conversations: [],
+        });
+      }
+      groups.get(key).conversations.push(conversation);
+    });
+    return Array.from(groups.values()).sort(function (a, b) {
+      return b.conversations.length - a.conversations.length;
+    });
+  }
+
+  function renderCallsTab() {
+    const card = el("div", "team-card team-calls");
+    const head = el("div", "calls-head");
+    head.append(el("h3", "team-card-title", "Calls by teammate"));
+    const groups = callsByOwner();
+    const total = state.conversations.length;
+    head.append(el("span", "calls-total", total + (total === 1 ? " call" : " calls")));
+    card.append(head);
+    card.append(
+      el(
+        "p",
+        "team-card-note",
+        "Conversations are private to their owner until shared. This view counts what is visible to you."
+      )
+    );
+
+    if (!groups.length) {
+      card.append(el("p", "team-card-note", "No calls in this organization yet."));
+      return card;
+    }
+
+    groups.forEach(function (group) {
+      const block = el("div", "calls-group");
+      const header = el("div", "calls-group-head");
+      const who = el("div", "calls-who");
+      who.append(el("span", "profile-avatar is-small", initials(group.name)));
+      const label = el("div", "calls-who-copy");
+      label.append(el("span", "calls-name", group.name + (group.isMine ? " (you)" : "")));
+      const shared = group.conversations.filter(function (c) { return c.visibility === "shared"; }).length;
+      const lines = group.conversations.reduce(function (sum, c) { return sum + (c.line_count || 0); }, 0);
+      label.append(
         el(
           "span",
-          "team-row-meta",
-          (conversation.line_count || 0) + " lines · " + (conversation.is_mine ? "yours" : "shared by " + (conversation.owner_name || "teammate"))
+          "calls-summary",
+          group.conversations.length + (group.conversations.length === 1 ? " call" : " calls") +
+            " · " + lines + " lines · " + shared + " shared"
         )
       );
-      list.append(row);
-    });
-    card.append(list);
+      who.append(label);
+      header.append(who);
+      block.append(header);
 
+      const rows = el("div", "team-list");
+      group.conversations.forEach(function (conversation) {
+        const row = el("div", "team-row");
+        row.append(el("span", "team-row-title", conversation.title));
+        row.append(
+          el(
+            "span",
+            "team-row-meta",
+            (conversation.line_count || 0) + " lines · " +
+              (conversation.visibility === "shared" ? "shared with team" : "private")
+          )
+        );
+        rows.append(row);
+      });
+      block.append(rows);
+      card.append(block);
+    });
+
+    return card;
+  }
+
+  function renderConversations() {
+    const card = el("div", "team-card");
+    card.append(el("h3", "team-card-title", "New conversation"));
     const form = el("form", "team-form");
     dom.convTitle = el("input", "team-input");
     dom.convTitle.placeholder = "Conversation title";
@@ -888,7 +954,6 @@
     card.append(form);
     return card;
   }
-
   function renderInsights() {
     const card = el("div", "team-card");
     card.append(el("h3", "team-card-title", "Your insights"));
@@ -1198,7 +1263,7 @@
     if (tab === "overview") {
       wrap.append(renderOverview(), renderOrgPicker());
     } else if (tab === "calls") {
-      wrap.append(renderConversations());
+      wrap.append(renderCallsTab(), renderConversations());
     } else if (tab === "insights") {
       wrap.append(renderInsights());
     } else if (tab === "playbook") {
@@ -1269,6 +1334,10 @@
   window.ClearCommitTeamView = {
     init: init,
     refresh: refreshAll,
+    // The desktop needs to know which company to save a conversation into.
+    activeOrgId: function () {
+      return state.orgId || null;
+    },
     __debug: function () {
       return {
         me: state.me ? state.me.profile.email : null,

@@ -1795,9 +1795,25 @@
     if (!dialog) return;
     const note = document.getElementById("onboarding-note");
     if (note) {
-      note.textContent =
-        "Personal conversations stay in this workspace unless you explicitly share one. " +
-        "Joining a team later does not move them.";
+      note.textContent = isDesktopShell()
+        ? "Personal conversations stay in this workspace unless you explicitly share one. " +
+          "Joining a team later does not move them."
+        : "On the web you can sign in to your team workspace. The private personal " +
+          "workspace runs in the Windows app.";
+    }
+    // In a browser there is no desktop workspace, so say so on the option.
+    const individual = document.getElementById("choose-individual");
+    if (individual && !isDesktopShell()) {
+      individual.classList.add("is-unavailable");
+      let hint = individual.querySelector(".onboarding-desktop-only");
+      if (!hint) {
+        hint = el(
+          "span",
+          "onboarding-desktop-only",
+          "Needs the Windows app"
+        );
+        individual.append(hint);
+      }
     }
     if (typeof dialog.showModal === "function") dialog.showModal();
     else dialog.setAttribute("open", "");
@@ -2335,6 +2351,9 @@
         applyMode("company");
         setView("team", { focus: false });
         if (window.ClearCommitTeamView) window.ClearCommitTeamView.refresh();
+        // A first-time visitor still needs to understand the product. The
+        // choice is offered here too, with the desktop option explained.
+        if (!readMode()) openOnboarding();
         return;
       }
       ui.bootMessage.textContent = errorTitle(error) + ": " + describeError(error);

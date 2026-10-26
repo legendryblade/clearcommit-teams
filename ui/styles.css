@@ -3433,3 +3433,12 @@ body[data-busy="true"] .status-light {
   text-transform: uppercase;
 }
 .team-advanced[open] .team-server { margin-top: 8px; }
+
+.onboarding-choice.is-unavailable { opacity: 0.72; }
+.onboarding-desktop-only {
+  margin-top: 2px;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--gold);
+}

@@ -3386,3 +3386,50 @@ body[data-busy="true"] .status-light {
   text-transform: uppercase;
   white-space: nowrap;
 }
+
+.capture-segment.is-caller {
+  border-left: 3px solid var(--teal);
+  background: var(--teal-soft);
+}
+.interpret-spoken {
+  margin-left: 8px;
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--teal);
+}
+
+/* Join-by-code card */
+.join-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  padding: 14px 18px;
+  margin-bottom: 14px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--teal);
+  border-radius: var(--radius);
+  background: var(--card);
+}
+.join-copy { display: grid; gap: 2px; }
+.join-hint { margin: 0; color: var(--ink-soft); font-size: 13px; }
+.join-form { display: flex; gap: 8px; align-items: center; }
+.join-input {
+  width: 190px;
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.team-advanced { margin-top: 10px; }
+.team-advanced-summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--ink-faint);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.team-advanced[open] .team-server { margin-top: 8px; }

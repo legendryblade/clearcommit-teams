@@ -36,6 +36,7 @@ def organization_brief(org: Organization) -> dict:
         "name": org.name,
         "created_at": _iso(org.created_at),
         "is_personal": bool(getattr(org, "is_personal", False)),
+        "join_code": getattr(org, "join_code", None),
     }
 
 

@@ -338,6 +338,42 @@
     render();
   }
 
+  async function joinByCode(event) {
+    event.preventDefault();
+    const input = document.getElementById("join-code");
+    const code = (input && input.value ? input.value : "").trim();
+    if (!code) return;
+    setBusy(true);
+    try {
+      const membership = await net.call("POST", "/api/join", { code: code });
+      state.orgId = membership.org_id;
+      if (input) input.value = "";
+      announce(
+        "Joined " + (membership.organization ? membership.organization.name : "the team") +
+          " as " + roleLabel(membership.role) + ".",
+        "ok"
+      );
+      resubscribe();
+      await refreshAll();
+    } catch (error) {
+      if (error.code === "invalid_code") {
+        announce("That code was not recognised. Check it with your manager.", "error");
+      } else {
+        failure(error, "Could not join that team.");
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function renderJoinCard() {
+    const card = document.getElementById("join-card");
+    if (!card) return;
+    // Only ask for a code once signed in and not already in a company.
+    const inCompany = (state.organizations || []).length > 0;
+    card.hidden = !net.signedIn() || inCompany;
+  }
+
   async function createOrg(event) {
     event.preventDefault();
     const name = dom.orgName.value.trim();
@@ -707,17 +743,24 @@
     });
     card.append(form);
 
+    // The server address is configuration, not something a normal user should
+    // see or type. It is keepable behind a disclosure for self-hosting.
+    const advanced = el("details", "team-advanced");
+    advanced.append(el("summary", "team-advanced-summary", "Advanced: server address"));
     const serverRow = el("div", "team-server");
-    serverRow.append(el("span", "team-field-label", "Team server"));
     dom.serverInput = el("input", "team-input");
     dom.serverInput.type = "url";
     dom.serverInput.value = net.serverUrl();
     const saveServer = button("Use this server", "button-quiet", function () {
       net.setServer(dom.serverInput.value);
-      announce("Team server set to " + net.serverUrl() + ".", "ok");
+      announce("Team server updated.", "ok");
     });
     serverRow.append(dom.serverInput, saveServer);
-    card.append(serverRow);
+    advanced.append(serverRow);
+    advanced.append(
+      el("p", "team-scope-note", "Only change this if you run your own ClearCommit server.")
+    );
+    card.append(advanced);
     const modeNote = el(
       "p",
       "team-scope-note",
@@ -748,6 +791,10 @@
       row.type = "button";
       row.append(el("span", "team-org-name", org.name));
       row.append(el("span", "team-org-role", roleLabel(org.role)));
+      if (org.join_code) {
+        row.append(el("code", "team-code", org.join_code));
+        row.title = "Share this code so a teammate can join";
+      }
       row.addEventListener("click", function () {
         state.orgId = org.org_id;
         void refreshOrgData().then(render);
@@ -1069,12 +1116,15 @@
       });
     }
     if (state.offline) setOffline(true);
+    renderJoinCard();
   }
 
   function init() {
     // Start waking a sleeping hosted backend immediately, before the user
     // reaches the sign-in form.
     if (window.ClearCommitNet) void window.ClearCommitNet.health();
+    const joinForm = document.getElementById("join-form");
+    if (joinForm) joinForm.addEventListener("submit", function (e) { void joinByCode(e); });
     dom.root = document.getElementById("team-root");
     dom.notice = document.getElementById("team-notice");
     dom.live = document.getElementById("team-live");

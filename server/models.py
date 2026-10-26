@@ -51,6 +51,8 @@ class Organization(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     name: Mapped[str] = mapped_column(String(160))
     created_by: Mapped[str] = mapped_column(String(36), ForeignKey("profiles.id"))
+    # Short human-typeable code an employee uses to join, instead of a UUID.
+    join_code: Mapped[str | None] = mapped_column(String(16), nullable=True, unique=True)
     # A personal workspace is an organization of one, so membership, audit and
     # RLS apply unchanged without inventing a second tenancy system.
     is_personal: Mapped[bool] = mapped_column(Boolean, default=False)

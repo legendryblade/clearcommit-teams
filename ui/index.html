@@ -207,7 +207,7 @@
               <div class="interpret-block" id="interpret-block" hidden>
                 <div class="capture-controls">
                   <label class="capture-field">
-                    <span class="capture-label">Translate your speech to</span>
+                    <span class="capture-label">Read the caller in</span>
                     <select class="capture-input" id="interpret-target"></select>
                   </label>
                   <label class="capture-field">
@@ -216,12 +216,12 @@
                   </label>
                   <label class="interpret-toggle">
                     <input type="checkbox" id="interpret-speak" />
-                    <span>Voice the translation to the caller</span>
+                    <span>Also voice my replies to them</span>
                   </label>
                 </div>
                 <p class="capture-note" id="interpret-note">
-                  Your words are translated and, if enabled, spoken into the selected output so the
-                  other person hears it in their language.
+                  The caller's speech is translated so you can read it here. Tick the box to also
+                  speak your own replies into the selected output.
                 </p>
                 <ol class="capture-segments" id="interpret-output" aria-live="polite"></ol>
               </div>
@@ -560,6 +560,17 @@
           </header>
 
           <div class="inline-alert team-notice" id="team-notice" role="status" hidden></div>
+
+          <div class="join-card" id="join-card" hidden>
+            <div class="join-copy">
+              <p class="panel-kicker">Join a team</p>
+              <p class="join-hint">Ask your manager for the team code, then enter it here.</p>
+            </div>
+            <form class="join-form" id="join-form">
+              <input class="team-input join-input" id="join-code" type="text" placeholder="TEAM CODE" maxlength="24" autocomplete="off" spellcheck="false" />
+              <button class="button button-primary" type="submit">Join</button>
+            </form>
+          </div>
 
           <div class="team-root" id="team-root"></div>
         </section>

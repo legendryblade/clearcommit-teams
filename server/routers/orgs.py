@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
 from ..audit import audit
+from ..join_codes import ensure_code, find_by_code
 from ..dependencies import (
     REVIEWER_ROLES,
     get_provisioned_principal,
@@ -14,7 +15,12 @@ from ..dependencies import (
 )
 from ..errors import ApiError
 from ..models import Invitation, Membership, Organization, Profile, new_id
-from ..schemas import InvitationAcceptRequest, InvitationCreateRequest, OrgCreateRequest
+from ..schemas import (
+    InvitationAcceptRequest,
+    InvitationCreateRequest,
+    JoinCodeRequest,
+    OrgCreateRequest,
+)
 from ..security import Principal
 from ..serializers import (
     invitation_brief,
@@ -37,6 +43,8 @@ def create_organization(
     org = Organization(id=new_id(), name=payload.name.strip(), created_by=principal.user_id)
     session.add(org)
     session.flush()
+    # Every company gets a shareable join code immediately.
+    ensure_code(session, org)
     membership = Membership(
         id=new_id(), org_id=org.id, user_id=principal.user_id, role="owner"
     )
@@ -45,7 +53,7 @@ def create_organization(
     session.commit()
     return {
         "ok": True,
-        "data": {**organization_brief(org), "role": "owner"},
+        "data": {**organization_brief(org), "role": "owner", "join_code": org.join_code},
     }
 
 
@@ -182,6 +190,84 @@ def revoke_invitation(
     )
     session.commit()
     return {"ok": True, "data": invitation_brief(invitation)}
+
+
+@router.post("/api/join")
+def join_with_code(
+    payload: JoinCodeRequest,
+    request: Request,
+    principal: Principal = Depends(get_provisioned_principal),
+    session: Session = Depends(get_session),
+):
+    """Join an organization with its shareable code.
+
+    A pending invitation for the verified account email supplies the role. With
+    no invitation the caller joins with the least-privileged role, so a stolen
+    code cannot grant manager rights. The account must always be verified.
+    """
+    if not principal.email_verified:
+        raise ApiError(
+            "email_not_verified",
+            "Confirm your email address before joining an organization.",
+            403,
+        )
+
+    org = find_by_code(session, payload.code)
+    if org is None:
+        raise ApiError("invalid_code", "That join code does not match any organization.", 404)
+
+    membership = (
+        session.query(Membership)
+        .filter(Membership.org_id == org.id, Membership.user_id == principal.user_id)
+        .one_or_none()
+    )
+    if membership is not None and membership.status == "active":
+        return {
+            "ok": True,
+            "data": {**membership_brief(membership), "organization": organization_brief(org)},
+        }
+
+    # A pending invitation for this email decides the role.
+    email = (principal.email or "").strip().lower()
+    invitation = (
+        session.query(Invitation)
+        .filter(
+            Invitation.org_id == org.id,
+            Invitation.email == email,
+            Invitation.status == "pending",
+        )
+        .one_or_none()
+    )
+    role = invitation.role if invitation is not None else "sales_rep"
+
+    if membership is None:
+        membership = Membership(
+            id=new_id(), org_id=org.id, user_id=principal.user_id, role=role
+        )
+        session.add(membership)
+    else:
+        membership.status = "active"
+        membership.role = role
+        membership.revoked_at = None
+
+    detail = {"role": role, "via": "join_code"}
+    if invitation is not None:
+        from datetime import datetime, timezone
+
+        invitation.status = "accepted"
+        invitation.accepted_by = principal.user_id
+        invitation.accepted_at = datetime.now(timezone.utc)
+        detail["invitation_id"] = invitation.id
+
+    audit(session, org.id, principal.user_id, "member.joined", "membership", membership.id, detail)
+    session.commit()
+    request.app.state.hub.emit(
+        org.id, "member.joined", "membership", membership.id, principal.user_id
+    )
+    return {
+        "ok": True,
+        "data": {**membership_brief(membership), "organization": organization_brief(org)},
+    }
 
 
 @router.get("/api/invitations/mine")

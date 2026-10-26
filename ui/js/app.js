@@ -1982,7 +1982,11 @@
     }
   }
 
-  async function interpretTurn(text) {
+  // The caller speaks their own language; we read it in ours. Translating
+  // their turns is what makes a foreign-language call understandable, so that
+  // is the primary direction. The user's own turns are translated too, which
+  // is the text the caller would need if it were spoken back.
+  async function interpretTurn(text, fromCaller) {
     if (!ui.interpretBlock || ui.interpretBlock.hidden) return;
     if (!text || !text.trim()) return;
     const target = ui.interpretTarget.value;
@@ -1991,15 +1995,22 @@
       const result = await bridge.call("interpret", {
         text: text.trim(),
         target: target,
-        speak: Boolean(ui.interpretSpeak.checked && !ui.interpretSpeak.disabled),
+        // Only the user's own speech is ever voiced to the caller.
+        speak: Boolean(
+          !fromCaller && ui.interpretSpeak.checked && !ui.interpretSpeak.disabled
+        ),
         device: ui.interpretDevice.value === "" ? null : Number(ui.interpretDevice.value),
       });
-      const item = el("li", "capture-segment");
-      item.append(el("span", "capture-speaker", "You \u2192 " + (result.target_name || target)));
+      const item = el("li", "capture-segment" + (fromCaller ? " is-caller" : ""));
+      item.append(
+        el(
+          "span",
+          "capture-speaker",
+          fromCaller ? "Caller \u2192 " + (result.target_name || target) : "You \u2192 " + (result.target_name || target)
+        )
+      );
       item.append(document.createTextNode(result.translated_text));
-      if (result.spoken) {
-        item.append(el("span", "interpret-spoken", "spoken"));
-      }
+      if (result.spoken) item.append(el("span", "interpret-spoken", "spoken"));
       ui.interpretOutput.append(item);
     } catch (error) {
       const item = el("li", "capture-segment is-error");
@@ -2061,10 +2072,10 @@
       const provider = ui.captureProvider ? ui.captureProvider.value : "groq";
       const result = await bridge.call("audio_poll", { provider: provider });
       const turns = result.turns || [];
-      // Translate only the user's own speech: the caller's audio is already
-      // in their language and should not be echoed back to them.
-      turns.filter(function (t) { return t.speaker === "rep"; }).forEach(function (t) {
-        void interpretTurn(t.text);
+      // Translate both sides. The caller's turns are the ones the user reads;
+      // the user's turns can optionally be voiced back to the caller.
+      turns.forEach(function (t) {
+        void interpretTurn(t.text, t.speaker === "customer");
       });
       if (turns.length) {
         turns.forEach(function (turn) {

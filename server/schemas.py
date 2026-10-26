@@ -25,6 +25,10 @@ class InvitationCreateRequest(BaseModel):
     role: str = Field(pattern="^(manager|sales_rep|marketing)$")
 
 
+class JoinCodeRequest(BaseModel):
+    code: str = Field(min_length=4, max_length=24)
+
+
 class InvitationAcceptRequest(BaseModel):
     invitation_id: str = Field(min_length=8, max_length=64)
 

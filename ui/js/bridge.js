@@ -38,6 +38,7 @@
     "provider_status",
     "test_provider",
     "refresh_preview",
+    "use_workspace",
   ]);
 
   const METHOD_SET = new Set(METHODS);

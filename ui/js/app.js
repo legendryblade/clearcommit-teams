@@ -1802,6 +1802,13 @@
     }
   }
 
+  // The team view switches the local workspace to the signed-in account. It
+  // needs the same bridge instance, and the local UI must reload afterwards.
+  window.ClearCommitLocalBridge = bridge;
+  window.ClearCommitLocalWorkspaceChanged = function () {
+    void boot();
+  };
+
   function initOnboarding() {
     const individual = document.getElementById("choose-individual");
     const company = document.getElementById("choose-company");

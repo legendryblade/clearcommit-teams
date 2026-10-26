@@ -1,4 +1,4 @@
-"""Project-confined paths.
+﻿"""Project-confined paths.
 
 All application writes are required to resolve inside this project's root.
 This is a deliberate isolation boundary: the original ClearCommit checkout is
@@ -9,6 +9,7 @@ refused rather than silently accepted.
 from __future__ import annotations
 
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -67,6 +68,29 @@ def database_path(data_dir: Path) -> Path:
     resolved = (data_dir / "clearcommit-teams.db").resolve()
     if not _inside(resolved, PROJECT_ROOT.resolve()):
         raise PathConfinementError("The workspace database must stay inside the project.")
+    return resolved
+
+
+WORKSPACES_DIR_NAME = "workspaces"
+_SAFE_WORKSPACE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
+
+
+def workspace_dir(base: Path, account_key: str | None) -> Path:
+    """Directory for one account's personal workspace.
+
+    ``account_key`` is a stable, non-secret identifier (never an email or a
+    token). ``None`` selects the guest workspace used before sign-in, so the
+    app stays usable offline. Every result stays inside the project root.
+    """
+    key = "guest" if not account_key else str(account_key)
+    if not _SAFE_WORKSPACE.match(key):
+        raise PathConfinementError(
+            "Workspace identifiers may only contain letters, digits, dot, dash and underscore.",
+            detail={"account_key": key},
+        )
+    resolved = (base / WORKSPACES_DIR_NAME / key).resolve()
+    if not _inside(resolved, PROJECT_ROOT.resolve()):
+        raise PathConfinementError("The workspace folder must stay inside the project.")
     return resolved
 
 

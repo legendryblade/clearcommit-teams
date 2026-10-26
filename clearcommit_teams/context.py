@@ -11,7 +11,7 @@ from .bridge import Bridge
 from .coaching import CoachingService
 from .db import Database
 from .demo_data import seed_samples
-from .paths import database_path, ensure_data_dir
+from .paths import database_path, ensure_data_dir, workspace_dir
 from .repository import Repository
 
 
@@ -36,18 +36,24 @@ def build_context(
     env: Mapping[str, str] | None = None,
     provider_factory: Callable | None = None,
 ) -> AppContext:
-    resolved = ensure_data_dir(data_dir)
+    base_dir = ensure_data_dir(data_dir)
+    # Personal data is scoped per account. The app opens in the guest
+    # workspace, which stays usable before sign-in and offline; signing in
+    # switches to that account's own folder via the bridge.
+    resolved = workspace_dir(base_dir, None)
+    resolved.mkdir(parents=True, exist_ok=True)
     db = Database(database_path(resolved))
     db.initialize()
     if _samples_enabled(env):
         seed_samples(db)
     repo = Repository(db)
     service = CoachingService(repo, provider_factory=provider_factory, env=env)
-    bridge = Bridge(repo, service, resolved)
-    return AppContext(
-        data_dir=resolved,
+    bridge = Bridge(repo, service, resolved, base_data_dir=base_dir)
+    context = AppContext(
+        data_dir=base_dir,
         db=db,
         repo=repo,
         service=service,
         bridge=bridge,
     )
+    return context

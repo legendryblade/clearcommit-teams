@@ -1,4 +1,4 @@
-"""Typed bridge between the HTML frontend and Python application logic.
+﻿"""Typed bridge between the HTML frontend and Python application logic.
 
 Every public method returns a stable envelope:
 
@@ -31,7 +31,7 @@ from .models import (
     parse_settings_input,
     parse_transcript,
 )
-from .paths import display_path
+from .paths import database_path, display_path, workspace_dir
 from .providers import ProviderSettings, build_provider, provider_status
 
 logger = logging.getLogger("clearcommit_teams.bridge")
@@ -58,6 +58,7 @@ PUBLIC_METHODS = (
     "provider_status",
     "test_provider",
     "refresh_preview",
+    "use_workspace",
 )
 
 
@@ -77,10 +78,18 @@ def _required_id(payload: Mapping[str, Any], key: str, label: str) -> str:
 
 
 class Bridge:
-    def __init__(self, repo: Repository, service: CoachingService, data_dir: Path) -> None:
+    def __init__(
+        self,
+        repo: Repository,
+        service: CoachingService,
+        data_dir: Path,
+        base_data_dir: Path | None = None,
+    ) -> None:
         self.repo = repo
         self.service = service
         self.data_dir = data_dir
+        self.base_data_dir = base_data_dir or data_dir
+        self.db = repo.db
 
     # ------------------------------------------------------------------ #
     # Envelope handling
@@ -324,6 +333,49 @@ class Bridge:
 
     def refresh_preview(self, payload: Any = None) -> dict:
         return self._execute("refresh_preview", lambda _: self.repo.preview(), payload)
+
+    def use_workspace(self, payload: Any = None) -> dict:
+        return self._execute("use_workspace", self._use_workspace, payload)
+
+    def _use_workspace(self, payload: Mapping[str, Any]) -> dict:
+        """Switch the active personal workspace to one account's folder.
+
+        ``account_key`` must be a stable, non-secret identifier chosen by the
+        caller (never an email address or a token). Passing ``None`` selects the
+        guest workspace, which keeps the app usable before sign-in and offline.
+        """
+        raw = payload.get("account_key")
+        if raw in (None, ""):
+            key = None
+        elif isinstance(raw, str):
+            key = raw.strip() or None
+        else:
+            raise ValidationError("account_key must be a string or omitted.")
+
+        target = workspace_dir(self.base_data_dir, key)
+
+        # Build against the base directory (which resolves to the guest
+        # workspace), then rebind to the account's own folder. Resolving in two
+        # steps would nest workspaces inside each other.
+        from .db import Database
+        from .repository import Repository
+        from .coaching import CoachingService
+
+        target.mkdir(parents=True, exist_ok=True)
+        db = Database(database_path(target))
+        db.initialize()
+        repo = Repository(db)
+        service = CoachingService(repo)
+        # Swap atomically only after the new workspace opened successfully.
+        self.db = db
+        self.repo = repo
+        self.service = service
+        self.data_dir = target
+        return {
+            "workspace": str(target),
+            "account_key": key or "guest",
+            "counts": db.counts(),
+        }
 
 
 def public_method_names() -> tuple[str, ...]:

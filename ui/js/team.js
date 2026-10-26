@@ -10,6 +10,12 @@
   const net = window.ClearCommitNet;
   if (!net) return;
 
+  // The local workspace bridge, exposed by app.js so this view can scope
+  // personal data to the signed-in account.
+  function localBridge() {
+    return window.ClearCommitLocalBridge || null;
+  }
+
   const dom = {};
   const state = {
     me: null,
@@ -27,6 +33,7 @@
     busy: false,
     lastEvent: null,
     sessionGeneration: 0,
+    localWorkspaceKey: null,
   };
 
   let socket = null;
@@ -78,6 +85,7 @@
       if (generation !== state.sessionGeneration) return;
       state.me = me;
       setOffline(false);
+      await useLocalWorkspaceFor(me.profile.user_id);
       state.organizations = me.organizations || [];
       if (!state.orgId || !state.organizations.some(function (o) { return o.org_id === state.orgId; })) {
         state.orgId = state.organizations.length ? state.organizations[0].org_id : null;
@@ -107,6 +115,40 @@
     }
   }
 
+  // The personal workspace on this PC follows the signed-in account, so two
+  // people sharing a computer never see each other's local conversations.
+  // A stable hash of the user id is used - never the email or the token.
+  async function useLocalWorkspaceFor(userId) {
+    const key = await accountKey(userId);
+    if (state.localWorkspaceKey === key) return;
+    try {
+      const local = localBridge();
+      if (!local) return;
+      await local.call("use_workspace", { account_key: key });
+      state.localWorkspaceKey = key;
+      if (window.ClearCommitLocalWorkspaceChanged) window.ClearCommitLocalWorkspaceChanged();
+    } catch (error) {
+      announce("Could not open this account's local workspace: " + error.message, "warn");
+    }
+  }
+
+  async function accountKey(userId) {
+    const text = "ccw:" + String(userId || "");
+    if (window.crypto && window.crypto.subtle) {
+      try {
+        const digest = await window.crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+        return Array.from(new Uint8Array(digest)).slice(0, 12).map(function (b) {
+          return b.toString(16).padStart(2, "0");
+        }).join("");
+      } catch (error) {
+        /* fall through to the simple hash */
+      }
+    }
+    let hash = 5381;
+    for (let i = 0; i < text.length; i++) hash = ((hash << 5) + hash + text.charCodeAt(i)) >>> 0;
+    return "h" + hash.toString(16);
+  }
+
   function clearAccountState() {
     net.setToken("");
     if (socket) {
@@ -125,6 +167,19 @@
     state.lastEvent = null;
     state.liveStatus = "signed_out";
     state.sessionGeneration++;
+    state.localWorkspaceKey = null;
+    const local = localBridge();
+    if (local) {
+      // Return to the guest workspace so the next person at this computer
+      // cannot see the previous account's personal conversations.
+      Promise.resolve(local.call("use_workspace", { account_key: null }))
+        .then(function () {
+          if (window.ClearCommitLocalWorkspaceChanged) window.ClearCommitLocalWorkspaceChanged();
+        })
+        .catch(function () {
+          /* the sign-out itself still succeeded */
+        });
+    }
     if (dom.root) clear(dom.root);
     renderLive();
   }

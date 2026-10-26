@@ -9,4 +9,6 @@
  * Never put a secret, a service-role key, or a token here: this file is
  * served to the browser.
  */
-window.CLEARCOMMIT_API_BASE = "https://clearcommit-teams-api.onrender.com";
+// Leave empty to use the API on this machine (local demo). A hosted build
+// sets its own API origin here instead.
+window.CLEARCOMMIT_API_BASE = "";

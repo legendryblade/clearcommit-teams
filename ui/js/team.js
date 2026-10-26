@@ -36,6 +36,7 @@
     localWorkspaceKey: null,
     pendingInvitations: [],
     tab: "overview",
+    memberView: null,
   };
 
   let socket = null;
@@ -873,25 +874,65 @@
     });
   }
 
+  // A manager works across the team; an employee works on their own calls.
+  // Same data, different scope, decided by the role the server reported.
+  function renderCallsList(conversations, emptyText) {
+    if (!conversations.length) return el("p", "team-card-note", emptyText);
+    const list = el("div", "team-list");
+    conversations.forEach(function (conversation) {
+      const row = el("div", "team-row");
+      row.append(el("span", "team-row-title", conversation.title));
+      row.append(
+        el(
+          "span",
+          "team-row-meta",
+          (conversation.line_count || 0) + " lines · " +
+            (conversation.visibility === "shared" ? "shared with team" : "private")
+        )
+      );
+      list.append(row);
+    });
+    return list;
+  }
+
   function renderCallsTab() {
+    const reviewer = canReview();
+    const mine = state.conversations.filter(function (c) { return c.is_mine; });
+    const others = state.conversations.filter(function (c) { return !c.is_mine; });
+
     const card = el("div", "team-card team-calls");
     const head = el("div", "calls-head");
-    head.append(el("h3", "team-card-title", "Calls by teammate"));
-    const groups = callsByOwner();
-    const total = state.conversations.length;
+    head.append(
+      el("h3", "team-card-title", reviewer ? "Team calls" : "My calls")
+    );
+    const total = reviewer ? state.conversations.length : mine.length;
     head.append(el("span", "calls-total", total + (total === 1 ? " call" : " calls")));
     card.append(head);
     card.append(
       el(
         "p",
         "team-card-note",
-        "Conversations are private to their owner until shared. This view counts what is visible to you."
+        reviewer
+          ? "Calls shared by the team. Private calls stay private until their owner shares them."
+          : "Your calls. They stay private until you share one with the team."
       )
     );
 
+    if (!reviewer) {
+      // An employee cares about their own work, not a roster.
+      card.append(renderCallsList(mine, "You have no calls yet."));
+      return card;
+    }
+
+    const groups = callsByOwner();
     if (!groups.length) {
       card.append(el("p", "team-card-note", "No calls in this organization yet."));
       return card;
+    }
+    if (!others.length) {
+      card.append(
+        el("p", "team-card-note", "No teammate has shared a call with the team yet.")
+      );
     }
 
     groups.forEach(function (group) {
@@ -1043,6 +1084,81 @@
     return card;
   }
 
+  // A manager opening one teammate: what that person has shared, and their
+  // evidence-linked observations. Facts about shared work only.
+  async function openMember(member) {
+    state.memberView = member.user_id;
+    render();
+  }
+
+  function renderMemberDetail() {
+    const member = (state.members || []).find(function (m) {
+      return m.user_id === state.memberView;
+    });
+    if (!member) {
+      state.memberView = null;
+      return null;
+    }
+    const name = (member.profile && member.profile.display_name) || member.user_id;
+    const card = el("div", "team-card");
+    const head = el("div", "calls-head");
+    head.append(el("h3", "team-card-title", name));
+    head.append(button("Back", "button-quiet", function () {
+      state.memberView = null;
+      render();
+    }));
+    card.append(head);
+    card.append(el("p", "team-card-note", roleLabel(member.role) + " · " + ((member.profile && member.profile.email) || "")));
+
+    const calls = state.conversations.filter(function (c) {
+      return c.owner_id === member.user_id;
+    });
+    const insights = (state.sharedInsights || []).filter(function (i) {
+      return i.owner_id === member.user_id;
+    });
+
+    const stats = el("div", "team-stats");
+    function stat(value, label) {
+      const box = el("div", "team-stat");
+      box.append(el("span", "team-stat-value", String(value)));
+      box.append(el("span", "team-stat-label", label));
+      return box;
+    }
+    stats.append(
+      stat(calls.length, calls.length === 1 ? "shared call" : "shared calls"),
+      stat(insights.length, insights.length === 1 ? "shared insight" : "shared insights")
+    );
+    card.append(stats);
+
+    if (calls.length) {
+      const list = el("div", "team-list");
+      calls.forEach(function (c) {
+        const row = el("div", "team-row");
+        row.append(el("span", "team-row-title", c.title));
+        row.append(el("span", "team-row-meta", (c.line_count || 0) + " lines · shared"));
+        list.append(row);
+      });
+      card.append(list);
+    }
+    if (insights.length) {
+      const list = el("div", "team-list");
+      insights.forEach(function (i) {
+        const row = el("div", "team-row");
+        row.append(el("span", "team-row-title", i.title));
+        row.append(el("span", "team-row-meta", i.category || "observation"));
+        list.append(row);
+      });
+      card.append(list);
+    }
+    card.append(
+      el(
+        "p",
+        "team-scope-note",
+        "Only work " + name + " chose to share appears here. Private calls and coaching stay private."
+      )
+    );
+    return card;
+  }
   function renderTeam() {
     const card = el("div", "team-card");
     card.append(el("h3", "team-card-title", "Members"));
@@ -1269,7 +1385,8 @@
     } else if (tab === "playbook") {
       wrap.append(renderPlaybook());
     } else if (tab === "team") {
-      wrap.append(renderTeam());
+      const detail = renderMemberDetail();
+      wrap.append(detail || renderTeam());
     } else {
       wrap.append(renderOrgPicker(), renderTeam());
     }

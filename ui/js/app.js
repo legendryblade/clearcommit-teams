@@ -102,7 +102,10 @@
     interpretDevice: "interpret-device",
     interpretSpeak: "interpret-speak",
     interpretNote: "interpret-note",
-    interpretOutput: "interpret-output",
+    interpretCaller: "interpret-caller",
+    interpretMine: "interpret-mine",
+    interpretCallerEmpty: "interpret-caller-empty",
+    interpretMineEmpty: "interpret-mine-empty",
     transcriptList: "transcript-list",
     transcriptEmpty: "transcript-empty",
     selectionCount: "selection-count",
@@ -2074,34 +2077,35 @@
     if (!text || !text.trim()) return;
     const target = ui.interpretTarget.value;
     if (!target) return;
+
+    const column = fromCaller ? ui.interpretCaller : ui.interpretMine;
+    const empty = fromCaller ? ui.interpretCallerEmpty : ui.interpretMineEmpty;
+    if (empty) empty.hidden = true;
+
+    // Show the original immediately so the user is never waiting on a spinner.
+    const item = el("li", "interpret-line" + (fromCaller ? " is-caller" : " is-mine"));
+    const original = el("span", "interpret-original", text.trim());
+    const translated = el("span", "interpret-translated", "\u2026");
+    item.append(original, translated);
+    column.append(item);
+    column.scrollTop = column.scrollHeight;
+
     try {
       const result = await bridge.call("interpret", {
         text: text.trim(),
         target: target,
         // Only the user's own speech is ever voiced to the caller.
-        speak: Boolean(
-          !fromCaller && ui.interpretSpeak.checked && !ui.interpretSpeak.disabled
-        ),
+        speak: Boolean(!fromCaller && ui.interpretSpeak.checked && !ui.interpretSpeak.disabled),
         device: ui.interpretDevice.value === "" ? null : Number(ui.interpretDevice.value),
       });
-      const item = el("li", "capture-segment" + (fromCaller ? " is-caller" : ""));
-      item.append(
-        el(
-          "span",
-          "capture-speaker",
-          fromCaller ? "Caller \u2192 " + (result.target_name || target) : "You \u2192 " + (result.target_name || target)
-        )
-      );
-      item.append(document.createTextNode(result.translated_text));
+      translated.textContent = result.translated_text;
       if (result.spoken) item.append(el("span", "interpret-spoken", "spoken"));
-      ui.interpretOutput.append(item);
     } catch (error) {
-      const item = el("li", "capture-segment is-error");
-      item.textContent = "Translation failed: " + describeError(error);
-      ui.interpretOutput.append(item);
+      translated.textContent = "";
+      item.classList.add("is-error");
+      item.append(el("span", "interpret-error", describeError(error)));
     }
   }
-
   async function toggleCapture() {
     if (capture.active) {
       await stopCapture();

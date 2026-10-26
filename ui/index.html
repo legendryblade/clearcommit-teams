@@ -207,23 +207,34 @@
               <div class="interpret-block" id="interpret-block" hidden>
                 <div class="capture-controls">
                   <label class="capture-field">
-                    <span class="capture-label">Read the caller in</span>
+                    <span class="capture-label">Their language</span>
                     <select class="capture-input" id="interpret-target"></select>
                   </label>
                   <label class="capture-field">
-                    <span class="capture-label">Speak it to the caller on</span>
+                    <span class="capture-label">Speak my replies on</span>
                     <select class="capture-input" id="interpret-device"></select>
                   </label>
                   <label class="interpret-toggle">
                     <input type="checkbox" id="interpret-speak" />
-                    <span>Also voice my replies to them</span>
+                    <span>Voice my replies to them</span>
                   </label>
                 </div>
+                <div class="interpret-columns">
+                  <div class="interpret-column">
+                    <p class="panel-kicker">They say (translated for you)</p>
+                    <ol class="interpret-lines" id="interpret-caller"></ol>
+                    <p class="interpret-empty" id="interpret-caller-empty">Waiting for the other person.</p>
+                  </div>
+                  <div class="interpret-column is-mine">
+                    <p class="panel-kicker">You say (translated for them)</p>
+                    <ol class="interpret-lines" id="interpret-mine"></ol>
+                    <p class="interpret-empty" id="interpret-mine-empty">Your speech appears here.</p>
+                  </div>
+                </div>
                 <p class="capture-note" id="interpret-note">
-                  The caller's speech is translated so you can read it here. Tick the box to also
-                  speak your own replies into the selected output.
+                  Both sides are transcribed. Their words are shown to you in your language; yours
+                  are translated and, if enabled, spoken to them.
                 </p>
-                <ol class="capture-segments" id="interpret-output" aria-live="polite"></ol>
               </div>
             </section>
 

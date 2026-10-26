@@ -3601,3 +3601,28 @@ body.is-web .rail-conversations {
 .calls-name { font-weight: 650; color: var(--ink); font-size: 14px; }
 .calls-summary { color: var(--ink-faint); font-size: 12px; }
 .profile-avatar.is-small { width: 30px; height: 30px; font-size: 11.5px; }
+
+/* Two-column interpretation: what they said, what you said */
+.interpret-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+@media (max-width: 900px) { .interpret-columns { grid-template-columns: 1fr; } }
+.interpret-column { display: grid; gap: 6px; align-content: start; }
+.interpret-lines {
+  display: grid; gap: 6px; margin: 0; padding: 0; list-style: none;
+  max-height: 220px; overflow-y: auto;
+}
+.interpret-line {
+  display: grid; gap: 2px;
+  padding: 8px 10px; border-radius: var(--radius-small);
+  border: 1px solid var(--line); background: var(--card);
+  border-left: 3px solid var(--teal);
+}
+.interpret-line.is-mine { border-left-color: var(--signal); }
+.interpret-line.is-error { border-left-color: var(--red); }
+.interpret-original { font-size: 12px; color: var(--ink-faint); }
+.interpret-translated { font-size: 14px; color: var(--ink); line-height: 1.45; }
+.interpret-error { font-size: 12px; color: var(--red); }
+.interpret-empty { margin: 0; font-size: 12.5px; color: var(--ink-faint); }

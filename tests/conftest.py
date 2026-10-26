@@ -25,7 +25,8 @@ def data_dir() -> Path:
 
 @pytest.fixture
 def ctx(data_dir: Path):
-    return build_context(data_dir)
+    # Sample conversations are opt-in; tests that rely on them say so here.
+    return build_context(data_dir, env={"CLEARCOMMIT_TEAMS_SEED_SAMPLES": "1"})
 
 
 @pytest.fixture

@@ -1,4 +1,4 @@
-"""Authentication endpoints.
+﻿"""Authentication endpoints.
 
 Demo mode only: /api/auth/demo/*. In Supabase mode the desktop client
 authenticates against Supabase Auth and presents the resulting JWT; this
@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from ..audit import audit
 from ..config import Settings
-from ..dependencies import get_principal, get_session, get_tokens
+from ..dependencies import get_provisioned_principal, get_session, get_tokens
 from ..errors import ApiError
 from ..models import Membership, Organization, Profile, new_id
 from ..schemas import SignInRequest, SignUpRequest
@@ -123,21 +123,10 @@ def demo_sign_in(
 
 @router.get("/api/auth/me")
 def me(
-    principal: Principal = Depends(get_principal),
+    principal: Principal = Depends(get_provisioned_principal),
     session: Session = Depends(get_session),
-    tokens=Depends(get_tokens),
 ):
     profile = session.get(Profile, principal.user_id)
-    if profile is None:
-        # Supabase mode: first sighting of a verified token provisions the
-        # local profile row. The verified token remains the identity source.
-        email = principal.email.strip().lower()
-        if not email:
-            raise ApiError("profile_missing", "The token does not carry an email claim.", 404)
-        display_name = email.split("@", 1)[0]
-        profile = Profile(id=principal.user_id, email=email, display_name=display_name)
-        session.add(profile)
-        session.commit()
     return {
         "ok": True,
         "data": {

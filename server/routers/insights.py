@@ -1,4 +1,4 @@
-"""Coaching insight endpoints, including the explicit share flow.
+﻿"""Coaching insight endpoints, including the explicit share flow.
 
 Insights are private to their author until the author shares them with the
 organization. Evidence references must point at lines of the author's own
@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
 from ..audit import audit
-from ..dependencies import enforce_rate_limit, get_principal, get_session, require_member
+from ..dependencies import enforce_rate_limit, get_provisioned_principal, get_session, require_member
 from ..errors import ApiError
 from .. import idempotency
 from ..models import CoachingInsight, Profile, Utterance, new_id
@@ -44,7 +44,7 @@ def create_insight(
     org_id: str,
     payload: InsightCreateRequest,
     request: Request,
-    principal: Principal = Depends(get_principal),
+    principal: Principal = Depends(get_provisioned_principal),
     session: Session = Depends(get_session),
 ):
     require_member(session, org_id, principal.user_id)
@@ -98,7 +98,7 @@ def create_insight(
 def list_insights(
     org_id: str,
     scope: str = "shared",
-    principal: Principal = Depends(get_principal),
+    principal: Principal = Depends(get_provisioned_principal),
     session: Session = Depends(get_session),
 ):
     require_member(session, org_id, principal.user_id)
@@ -129,7 +129,7 @@ def list_insights(
 @router.get("/api/insights/{insight_id}")
 def get_insight(
     insight_id: str,
-    principal: Principal = Depends(get_principal),
+    principal: Principal = Depends(get_provisioned_principal),
     session: Session = Depends(get_session),
 ):
     insight = load_insight(session, insight_id, principal.user_id)
@@ -143,7 +143,7 @@ def get_insight(
 def share_insight(
     insight_id: str,
     request: Request,
-    principal: Principal = Depends(get_principal),
+    principal: Principal = Depends(get_provisioned_principal),
     session: Session = Depends(get_session),
 ):
     insight = session.get(CoachingInsight, insight_id)

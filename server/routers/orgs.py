@@ -1,4 +1,4 @@
-"""Organization, membership, and invitation endpoints."""
+﻿"""Organization, membership, and invitation endpoints."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from ..audit import audit
 from ..dependencies import (
     REVIEWER_ROLES,
-    get_principal,
+    get_provisioned_principal,
     get_session,
     require_member,
 )
@@ -31,7 +31,7 @@ router = APIRouter(tags=["orgs"])
 def create_organization(
     payload: OrgCreateRequest,
     request: Request,
-    principal: Principal = Depends(get_principal),
+    principal: Principal = Depends(get_provisioned_principal),
     session: Session = Depends(get_session),
 ):
     org = Organization(id=new_id(), name=payload.name.strip(), created_by=principal.user_id)
@@ -51,7 +51,7 @@ def create_organization(
 
 @router.get("/api/orgs")
 def list_my_organizations(
-    principal: Principal = Depends(get_principal),
+    principal: Principal = Depends(get_provisioned_principal),
     session: Session = Depends(get_session),
 ):
     return {"ok": True, "data": {"organizations": _org_summaries(session, principal.user_id)}}
@@ -60,7 +60,7 @@ def list_my_organizations(
 @router.get("/api/orgs/{org_id}")
 def get_organization(
     org_id: str,
-    principal: Principal = Depends(get_principal),
+    principal: Principal = Depends(get_provisioned_principal),
     session: Session = Depends(get_session),
 ):
     require_member(session, org_id, principal.user_id)
@@ -86,7 +86,7 @@ def create_invitation(
     org_id: str,
     payload: InvitationCreateRequest,
     request: Request,
-    principal: Principal = Depends(get_principal),
+    principal: Principal = Depends(get_provisioned_principal),
     session: Session = Depends(get_session),
 ):
     require_member(session, org_id, principal.user_id, roles=REVIEWER_ROLES)
@@ -127,7 +127,7 @@ def create_invitation(
 @router.get("/api/orgs/{org_id}/invitations")
 def list_invitations(
     org_id: str,
-    principal: Principal = Depends(get_principal),
+    principal: Principal = Depends(get_provisioned_principal),
     session: Session = Depends(get_session),
 ):
     require_member(session, org_id, principal.user_id, roles=REVIEWER_ROLES)
@@ -144,7 +144,7 @@ def list_invitations(
 def revoke_invitation(
     org_id: str,
     invitation_id: str,
-    principal: Principal = Depends(get_principal),
+    principal: Principal = Depends(get_provisioned_principal),
     session: Session = Depends(get_session),
 ):
     require_member(session, org_id, principal.user_id, roles=REVIEWER_ROLES)
@@ -169,7 +169,7 @@ def revoke_invitation(
 
 @router.get("/api/invitations/mine")
 def my_invitations(
-    principal: Principal = Depends(get_principal),
+    principal: Principal = Depends(get_provisioned_principal),
     session: Session = Depends(get_session),
 ):
     email = (principal.email or "").strip().lower()
@@ -197,7 +197,7 @@ def my_invitations(
 def accept_invitation(
     payload: InvitationAcceptRequest,
     request: Request,
-    principal: Principal = Depends(get_principal),
+    principal: Principal = Depends(get_provisioned_principal),
     session: Session = Depends(get_session),
 ):
     invitation = session.get(Invitation, payload.invitation_id)
@@ -257,7 +257,7 @@ def revoke_member(
     org_id: str,
     user_id: str,
     request: Request,
-    principal: Principal = Depends(get_principal),
+    principal: Principal = Depends(get_provisioned_principal),
     session: Session = Depends(get_session),
 ):
     require_member(session, org_id, principal.user_id, roles={"owner"})

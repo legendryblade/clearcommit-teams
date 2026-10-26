@@ -1,4 +1,4 @@
-"""Approved-messaging endpoints (marketing drafts, reviewer publishing)
+﻿"""Approved-messaging endpoints (marketing drafts, reviewer publishing)
 plus the sales-versus-approved-messaging claim check.
 
 Marketing can author and edit drafts. Only reviewers publish. Published
@@ -17,7 +17,7 @@ from ..audit import audit
 from ..dependencies import (
     REVIEWER_ROLES,
     enforce_rate_limit,
-    get_principal,
+    get_provisioned_principal,
     get_session,
     require_member,
 )
@@ -55,7 +55,7 @@ def create_messaging(
     org_id: str,
     payload: MessagingCreateRequest,
     request: Request,
-    principal: Principal = Depends(get_principal),
+    principal: Principal = Depends(get_provisioned_principal),
     session: Session = Depends(get_session),
 ):
     require_member(session, org_id, principal.user_id, roles=AUTHOR_ROLES)
@@ -87,7 +87,7 @@ def create_messaging(
 @router.get("/api/orgs/{org_id}/messaging")
 def list_messaging(
     org_id: str,
-    principal: Principal = Depends(get_principal),
+    principal: Principal = Depends(get_provisioned_principal),
     session: Session = Depends(get_session),
 ):
     membership = require_member(session, org_id, principal.user_id)
@@ -102,7 +102,7 @@ def list_messaging(
 def update_messaging(
     messaging_id: str,
     payload: MessagingCreateRequest,
-    principal: Principal = Depends(get_principal),
+    principal: Principal = Depends(get_provisioned_principal),
     session: Session = Depends(get_session),
 ):
     entry = load_messaging(session, messaging_id, principal.user_id)
@@ -132,7 +132,7 @@ def update_messaging(
 def publish_messaging(
     messaging_id: str,
     request: Request,
-    principal: Principal = Depends(get_principal),
+    principal: Principal = Depends(get_provisioned_principal),
     session: Session = Depends(get_session),
 ):
     entry = load_messaging(session, messaging_id, principal.user_id)
@@ -166,7 +166,7 @@ def check_claims(
     org_id: str,
     payload: CheckClaimsRequest,
     request: Request,
-    principal: Principal = Depends(get_principal),
+    principal: Principal = Depends(get_provisioned_principal),
     session: Session = Depends(get_session),
 ):
     require_member(session, org_id, principal.user_id)

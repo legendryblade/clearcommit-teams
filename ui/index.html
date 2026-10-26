@@ -1,9 +1,9 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self' http://127.0.0.1:8770 http://localhost:8770 ws://127.0.0.1:8770 ws://localhost:8770; base-uri 'none'; form-action 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self' http://127.0.0.1:8770 http://localhost:8770 ws://127.0.0.1:8770 ws://localhost:8770 https://*.supabase.co; base-uri 'none'; form-action 'none'">
   <title>ClearCommit Teams</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231b3b32'/%3E%3Cpath d='M20 32a10 10 0 0 1 10-10h8a10 10 0 0 1 0 20h-4' fill='none' stroke='%23f4ede1' stroke-width='5' stroke-linecap='round'/%3E%3Cpath d='M44 32a10 10 0 0 1-10 10h-8a10 10 0 0 1 0-20h4' fill='none' stroke='%23d9822b' stroke-width='5' stroke-linecap='round'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="styles.css">
@@ -96,7 +96,7 @@
               <span class="workspace-index">04</span>
               <span class="workspace-copy">
                 <span class="workspace-name">Team signals</span>
-                <span class="workspace-note">Design preview</span>
+                <span class="workspace-note">Aggregate view</span>
               </span>
             </button>
             <button class="workspace-link" type="button" data-view="team">
@@ -410,9 +410,9 @@
         <section class="view" id="view-signals" data-view-panel="signals" hidden>
           <header class="view-head">
             <div class="view-head-copy">
-              <p class="eyebrow">Team signals <span class="eyebrow-divider">/</span> Design preview</p>
+              <p class="eyebrow">Team signals <span class="eyebrow-divider">/</span> Aggregate view</p>
               <h1 id="signals-title" tabindex="-1">Team signals</h1>
-              <p class="view-subtitle">A local, aggregate view of approved guidance. This preview never ranks individual employees.</p>
+              <p class="view-subtitle">Computed from your workspace records. It summarizes approved guidance and coaching coverage, and never ranks individual employees.</p>
             </div>
             <div class="view-actions">
               <button class="button button-quiet" type="button" data-action="refresh-signals">Refresh preview</button>
@@ -466,9 +466,9 @@
           <div class="consent-banner">
             <div>
               <p class="panel-kicker">Guardrail</p>
-              <p id="consent-note">Team Insights is a design preview. This build does not aggregate employee performance scores.</p>
+              <p id="consent-note">These totals come from records in this workspace. No individual is scored or ranked.</p>
             </div>
-            <span class="status-chip status-chip-quiet">Preview only</span>
+            <span class="status-chip status-chip-quiet">No individual scoring</span>
           </div>
         </section>
 

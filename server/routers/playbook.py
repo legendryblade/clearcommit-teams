@@ -1,4 +1,4 @@
-"""Playbook endpoints: draft, review, approve, revise, and audit history.
+﻿"""Playbook endpoints: draft, review, approve, revise, and audit history.
 
 Approval is a reviewer action: the approver is always taken from the verified
 token, discovery questions are required before approval, and editing an
@@ -16,7 +16,7 @@ from ..audit import audit
 from ..dependencies import (
     REVIEWER_ROLES,
     enforce_rate_limit,
-    get_principal,
+    get_provisioned_principal,
     get_session,
     require_member,
 )
@@ -43,7 +43,7 @@ def create_entry(
     org_id: str,
     payload: PlaybookCreateRequest,
     request: Request,
-    principal: Principal = Depends(get_principal),
+    principal: Principal = Depends(get_provisioned_principal),
     session: Session = Depends(get_session),
 ):
     require_member(session, org_id, principal.user_id)
@@ -87,7 +87,7 @@ def create_entry(
 def list_entries(
     org_id: str,
     status: str | None = None,
-    principal: Principal = Depends(get_principal),
+    principal: Principal = Depends(get_provisioned_principal),
     session: Session = Depends(get_session),
 ):
     require_member(session, org_id, principal.user_id)
@@ -112,7 +112,7 @@ def list_entries(
 @router.get("/api/playbook/{entry_id}")
 def get_entry(
     entry_id: str,
-    principal: Principal = Depends(get_principal),
+    principal: Principal = Depends(get_provisioned_principal),
     session: Session = Depends(get_session),
 ):
     entry = load_entry(session, entry_id, principal.user_id)
@@ -124,7 +124,7 @@ def approve_entry(
     entry_id: str,
     payload: ApproveRequest,
     request: Request,
-    principal: Principal = Depends(get_principal),
+    principal: Principal = Depends(get_provisioned_principal),
     session: Session = Depends(get_session),
 ):
     entry = load_entry(session, entry_id, principal.user_id)
@@ -188,7 +188,7 @@ def update_entry(
     entry_id: str,
     payload: PlaybookUpdateRequest,
     request: Request,
-    principal: Principal = Depends(get_principal),
+    principal: Principal = Depends(get_provisioned_principal),
     session: Session = Depends(get_session),
 ):
     entry = load_entry(session, entry_id, principal.user_id)
@@ -259,7 +259,7 @@ def update_entry(
 def list_audit(
     org_id: str,
     limit: int = 50,
-    principal: Principal = Depends(get_principal),
+    principal: Principal = Depends(get_provisioned_principal),
     session: Session = Depends(get_session),
 ):
     require_member(session, org_id, principal.user_id, roles=REVIEWER_ROLES)

@@ -1,4 +1,4 @@
-﻿"""Authentication primitives.
+"""Authentication primitives.
 
 - demo mode: this server issues and verifies its own signed tokens and stores
   scrypt password hashes locally. Local demo flow only, labeled as such.
@@ -81,6 +81,10 @@ class TokenService:
             load_or_create_demo_secret(settings) if settings.mode == "demo" else None
         )
         self._jwks_client: pyjwt.PyJWKClient | None = None
+        # Supabase's issuer clock can lead the local clock by a second or two,
+        # which makes freshly issued tokens fail the `iat` check. A small
+        # leeway accepts them without weakening expiry meaningfully.
+        self.leeway = max(0, int(getattr(settings, "jwt_leeway_seconds", 60) or 0))
 
     def issue_demo_token(self, user_id: str, email: str) -> str:
         now = int(time.time())
@@ -101,6 +105,7 @@ class TokenService:
                     self._demo_secret,
                     algorithms=["HS256"],
                     issuer="clearcommit-teams-demo",
+                    leeway=self.leeway,
                     options={"require": ["exp", "iat", "sub", "iss"]},
                 )
             else:
@@ -124,6 +129,7 @@ class TokenService:
                 self.settings.supabase_jwt_secret,
                 algorithms=["HS256"],
                 audience="authenticated",
+                leeway=self.leeway,
                 options=options,
             )
         if self._jwks_client is None:
@@ -148,6 +154,7 @@ class TokenService:
             signing_key.key,
             algorithms=["RS256", "ES256"],
             audience="authenticated",
+            leeway=self.leeway,
             options=options,
         )
 
@@ -157,7 +164,12 @@ class TokenService:
             return True
         try:
             url = f"{self.settings.supabase_url}/auth/v1/health"
-            response = httpx.get(url, timeout=self.settings.request_timeout_seconds)
+            headers = {}
+            if self.settings.supabase_anon_key:
+                headers["apikey"] = self.settings.supabase_anon_key
+            response = httpx.get(
+                url, headers=headers, timeout=self.settings.request_timeout_seconds
+            )
             return response.status_code == 200
         except httpx.HTTPError:
             return False

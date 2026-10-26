@@ -43,6 +43,23 @@ def get_principal(
     return principal
 
 
+def get_provisioned_principal(
+    request: Request,
+    principal: Principal = Depends(get_principal),
+    session: Session = Depends(get_session),
+) -> Principal:
+    """Verified principal whose profile row is guaranteed to exist.
+
+    Every route that writes organization data depends on this, so a valid
+    Supabase token can never reach an INSERT that references a missing
+    profile row.
+    """
+    from .profiles import ensure_profile
+
+    ensure_profile(session, principal)
+    return principal
+
+
 def enforce_rate_limit(request: Request, principal: Principal, bucket: str = "api") -> None:
     limiter = request.app.state.limiter
     if not limiter.allow(f"{bucket}:{principal.user_id}"):

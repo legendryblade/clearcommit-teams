@@ -38,6 +38,7 @@ class Settings:
     token_ttl_minutes: int
     request_timeout_seconds: float
     rate_limit_per_minute: int
+    jwt_leeway_seconds: int
 
     @property
     def is_supabase(self) -> bool:
@@ -93,4 +94,5 @@ def load_settings(env: dict[str, str] | None = None) -> Settings:
         token_ttl_minutes=token_ttl,
         request_timeout_seconds=request_timeout,
         rate_limit_per_minute=rate_limit,
+        jwt_leeway_seconds=int(_clean(env.get("CLEARCOMMIT_JWT_LEEWAY_SECONDS")) or 60),
     )

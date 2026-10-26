@@ -12,11 +12,29 @@ from .config import ConfigError, load_settings
 from .main import create_app
 
 
+def _load_local_env() -> None:
+    """Load .env from the project root if python-dotenv is available.
+
+    Real environment variables always win; this only fills the gaps so the
+    documented `python -m server` works straight after writing a .env.
+    """
+    try:
+        from dotenv import load_dotenv
+    except ImportError:
+        return
+    from pathlib import Path
+
+    env_path = Path(__file__).resolve().parent.parent / ".env"
+    if env_path.exists():
+        load_dotenv(env_path, override=False)
+
+
 def main() -> int:
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
     )
+    _load_local_env()
     try:
         settings = load_settings()
     except ConfigError as exc:

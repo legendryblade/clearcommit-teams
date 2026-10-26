@@ -1,4 +1,4 @@
-"""Authenticated real-time event stream.
+﻿"""Authenticated real-time event stream.
 
 The token is verified before the socket is accepted. A client is subscribed
 only to the organizations its verified session belongs to; the client cannot

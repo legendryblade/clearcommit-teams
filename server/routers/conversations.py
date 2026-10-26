@@ -1,4 +1,4 @@
-"""Conversation and utterance endpoints.
+﻿"""Conversation and utterance endpoints.
 
 Conversations are private to their owner by default. Other organization
 members can see a conversation only after its owner explicitly shares it.
@@ -12,7 +12,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from ..audit import audit
-from ..dependencies import get_principal, get_session, require_member
+from ..dependencies import get_provisioned_principal, get_session, require_member
 from ..errors import ApiError
 from ..models import Conversation, Profile, Utterance, new_id
 from ..schemas import ConversationCreateRequest, UtteranceBulkRequest
@@ -46,7 +46,7 @@ def create_conversation(
     org_id: str,
     payload: ConversationCreateRequest,
     request: Request,
-    principal: Principal = Depends(get_principal),
+    principal: Principal = Depends(get_provisioned_principal),
     session: Session = Depends(get_session),
 ):
     require_member(session, org_id, principal.user_id)
@@ -74,7 +74,7 @@ def create_conversation(
 @router.get("/api/orgs/{org_id}/conversations")
 def list_conversations(
     org_id: str,
-    principal: Principal = Depends(get_principal),
+    principal: Principal = Depends(get_provisioned_principal),
     session: Session = Depends(get_session),
 ):
     require_member(session, org_id, principal.user_id)
@@ -117,7 +117,7 @@ def list_conversations(
 def get_conversation(
     org_id: str,
     conversation_id: str,
-    principal: Principal = Depends(get_principal),
+    principal: Principal = Depends(get_provisioned_principal),
     session: Session = Depends(get_session),
 ):
     require_member(session, org_id, principal.user_id)
@@ -140,7 +140,7 @@ def append_utterances(
     conversation_id: str,
     payload: UtteranceBulkRequest,
     request: Request,
-    principal: Principal = Depends(get_principal),
+    principal: Principal = Depends(get_provisioned_principal),
     session: Session = Depends(get_session),
 ):
     require_member(session, org_id, principal.user_id)
@@ -184,7 +184,7 @@ def share_conversation(
     org_id: str,
     conversation_id: str,
     request: Request,
-    principal: Principal = Depends(get_principal),
+    principal: Principal = Depends(get_provisioned_principal),
     session: Session = Depends(get_session),
 ):
     require_member(session, org_id, principal.user_id)

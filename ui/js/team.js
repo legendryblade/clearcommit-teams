@@ -26,6 +26,7 @@
     offline: false,
     busy: false,
     lastEvent: null,
+    sessionGeneration: 0,
   };
 
   let socket = null;
@@ -69,8 +70,12 @@
       render();
       return;
     }
+    // Guard against a refresh started under a previous session resolving after
+    // an account switch and painting stale account data into the new session.
+    const generation = ++state.sessionGeneration;
     try {
       const me = await net.call("GET", "/api/auth/me");
+      if (generation !== state.sessionGeneration) return;
       state.me = me;
       setOffline(false);
       state.organizations = me.organizations || [];
@@ -78,18 +83,50 @@
         state.orgId = state.organizations.length ? state.organizations[0].org_id : null;
       }
       await refreshOrgData();
+      if (generation !== state.sessionGeneration) {
+        return;
+      }
       announce("", null);
+      render();
     } catch (error) {
+      if (generation !== state.sessionGeneration) return;
       if (error.code === "network_error") {
         setOffline(true);
         announce("Offline: showing the last known state. Nothing new is synced.", "warn");
-      } else if (error.status === 401) {
-        announce("Your session expired. Sign in again.", "warn");
+      } else if (error.status === 401 || error.code === "token_expired" || error.code === "invalid_token") {
+        // A rejected session must fully clear account-scoped state. Leaving the
+        // token in place renders a signed-out card over a dead session and the
+        // next account inherits the previous account's UI.
+        clearAccountState();
+        announce("Your session ended. Sign in again.", "warn");
       } else {
         announce(error.message, "error");
       }
+      if (generation !== state.sessionGeneration) return;
+      render();
     }
-    render();
+  }
+
+  function clearAccountState() {
+    net.setToken("");
+    if (socket) {
+      socket.close();
+      socket = null;
+    }
+    state.me = null;
+    state.orgId = null;
+    state.organizations = [];
+    state.members = [];
+    state.conversations = [];
+    state.myInsights = [];
+    state.sharedInsights = [];
+    state.playbook = [];
+    state.invitations = [];
+    state.lastEvent = null;
+    state.liveStatus = "signed_out";
+    state.sessionGeneration++;
+    if (dom.root) clear(dom.root);
+    renderLive();
   }
 
   async function refreshOrgData() {
@@ -141,6 +178,18 @@
     try {
       const mode = await resolveMode();
       const data = await net.signIn(mode, { email: email, password: password });
+      // A new identity invalidates anything started under the previous one.
+      state.sessionGeneration++;
+      state.me = null;
+      state.orgId = null;
+      state.organizations = [];
+      state.members = [];
+      state.conversations = [];
+      state.myInsights = [];
+      state.sharedInsights = [];
+      state.playbook = [];
+      state.invitations = [];
+      if (socket) socket.close();
       socket = net.connect({ onEvent: onServerEvent, onStatus: onLiveStatus });
       announce(
         "Signed in as " + data.profile.display_name + " (" + mode + " authentication).",
@@ -196,14 +245,9 @@
     }
   }
   function signOut() {
-    net.setToken("");
-    if (socket) socket.close();
-    socket = null;
-    state.orgId = null;
-    state.me = null;
-    state.liveStatus = "signed_out";
+    clearAccountState();
     announce("Signed out. Local workspace data is untouched.", "ok");
-    refreshAll();
+    render();
   }
 
   async function createOrg(event) {
@@ -412,9 +456,18 @@
     }
   }
 
-  function onLiveStatus(status, detail) {
+  function onLiveStatus(status) {
     state.liveStatus = status;
     renderLive();
+    // A rejected session must return to the sign-in state instead of leaving
+    // the user in a dead "Session rejected" view with a token that cannot work.
+    if (status === "unauthorized" && net.signedIn()) {
+      net.setToken("");
+      state.me = null;
+      state.orgId = null;
+      announce("Your session was rejected. Sign in again.", "warn");
+      void refreshAll();
+    }
   }
 
   function onServerEvent(event) {
@@ -821,6 +874,16 @@
   window.ClearCommitTeamView = {
     init: init,
     refresh: refreshAll,
+    __debug: function () {
+      return {
+        me: state.me ? state.me.profile.email : null,
+        orgId: state.orgId,
+        orgs: state.organizations.length,
+        generation: state.sessionGeneration,
+        signedIn: net.signedIn(),
+        header: Boolean(dom.root && dom.root.querySelector(".team-header")),
+      };
+    },
     isSignedIn: function () {
       return net.signedIn();
     },

@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import json
 import uuid
@@ -29,11 +29,18 @@ def test_samples_seed_once_with_evidence_refs(ctx) -> None:
 
 
 def test_seed_is_idempotent_across_contexts(data_dir) -> None:
-    first = build_context(data_dir)
-    second = build_context(data_dir)
+    env = {"CLEARCOMMIT_TEAMS_SEED_SAMPLES": "1"}
+    first = build_context(data_dir, env=env)
+    second = build_context(data_dir, env=env)
     assert len(first.repo.list_sessions()) == 3
     assert len(second.repo.list_sessions()) == 3
     assert second.db.counts()["utterances"] == 26
+
+
+def test_workspace_starts_empty_without_seeding(data_dir) -> None:
+    fresh = build_context(data_dir)
+    assert fresh.repo.list_sessions() == []
+    assert fresh.db.counts()["sessions"] == 0
 
 
 def test_create_session_add_utterance_and_import(ctx) -> None:
@@ -134,7 +141,8 @@ def test_relative_data_dir_resolves_under_project(data_dir) -> None:
     assert database_path(resolved).parent == resolved
 
 
-def test_check_command_reports_workspace(data_dir, capsys) -> None:
+def test_check_command_reports_workspace(data_dir, capsys, monkeypatch) -> None:
+    monkeypatch.setenv("CLEARCOMMIT_TEAMS_SEED_SAMPLES", "1")
     assert main(["--check", "--data-dir", str(data_dir)]) == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["ok"] is True

@@ -20,7 +20,11 @@ from tests.support import StubProvider, answer_json, coach_json, insight
 
 
 def context_with(data_dir, provider: StubProvider):
-    return build_context(data_dir, provider_factory=lambda settings: provider)
+    return build_context(
+        data_dir,
+        env={"CLEARCOMMIT_TEAMS_SEED_SAMPLES": "1"},
+        provider_factory=lambda settings: provider,
+    )
 
 
 def run_count(ctx) -> int:

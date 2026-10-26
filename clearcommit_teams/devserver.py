@@ -35,7 +35,8 @@ class DevHandler(SimpleHTTPRequestHandler):
             "Content-Security-Policy",
             "default-src 'self'; script-src 'self'; style-src 'self'; "
             "img-src 'self' data:; connect-src 'self' http://127.0.0.1:8770 "
-            "http://localhost:8770 ws://127.0.0.1:8770 ws://localhost:8770; "
+            "http://localhost:8770 ws://127.0.0.1:8770 ws://localhost:8770 "
+            "https://*.supabase.co; "
             "frame-ancestors 'none'",
         )
         super().end_headers()

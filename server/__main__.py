@@ -42,16 +42,16 @@ def main() -> int:
         return 1
 
     app = create_app(settings)
-    # Hosting platforms inject $PORT and expect a 0.0.0.0 bind. Explicit
-    # CLEARCOMMIT_* values still win so local use is unchanged.
-    host = os.environ.get("CLEARCOMMIT_SERVER_HOST") or (
-        "0.0.0.0" if os.environ.get("PORT") else "127.0.0.1"
-    )
-    port = int(
-        os.environ.get("CLEARCOMMIT_SERVER_PORT")
-        or os.environ.get("PORT")
-        or "8770"
-    )
+    # A hosting platform injects PORT and expects a 0.0.0.0 bind. When PORT is
+    # present it always wins, because a managed host routes traffic to exactly
+    # that port and an explicit CLEARCOMMIT_SERVER_PORT would break it.
+    platform_port = os.environ.get("PORT")
+    if platform_port:
+        host = os.environ.get("CLEARCOMMIT_SERVER_HOST") or "0.0.0.0"
+        port = int(platform_port)
+    else:
+        host = os.environ.get("CLEARCOMMIT_SERVER_HOST") or "127.0.0.1"
+        port = int(os.environ.get("CLEARCOMMIT_SERVER_PORT") or "8770")
     uvicorn.run(app, host=host, port=port, log_level="info")
     return 0
 

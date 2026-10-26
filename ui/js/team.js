@@ -369,9 +369,15 @@
   function renderJoinCard() {
     const card = document.getElementById("join-card");
     if (!card) return;
-    // Only ask for a code once signed in and not already in a company.
-    const inCompany = (state.organizations || []).length > 0;
-    card.hidden = !net.signedIn() || inCompany;
+    // Visible whenever signed in. It stays available even when the account is
+    // already in a company, because people belong to several teams.
+    card.hidden = !net.signedIn();
+    const hint = card.querySelector(".join-hint");
+    if (hint) {
+      hint.textContent = (state.organizations || []).length
+        ? "Join another team: enter the code your manager gave you."
+        : "Ask your manager for the team code, then enter it here.";
+    }
   }
 
   async function createOrg(event) {

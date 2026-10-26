@@ -19,13 +19,13 @@ RUN pip install --no-cache-dir -r requirements-server.txt
 
 COPY server ./server
 
-# Supabase (or any PostgreSQL) is required for a hosted deployment.
-ENV CLEARCOMMIT_SERVER_HOST=0.0.0.0 \
-    CLEARCOMMIT_SERVER_PORT=8770
+# Default to 8770 for local runs. A hosting platform injects PORT, which takes
+# precedence in server/__main__.py, so no port is baked into the image.
+ENV CLEARCOMMIT_SERVER_HOST=0.0.0.0
 
 EXPOSE 8770
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-    CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8770/health', timeout=4).status == 200 else 1)"
+HEALTHCHECK --interval=30s --timeout=5s --start-period=25s --retries=3 \
+    CMD python -c "import os,sys,urllib.request; p=os.environ.get('PORT') or '8770'; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:'+p+'/health', timeout=4).status == 200 else 1)"
 
 CMD ["python", "-m", "server"]

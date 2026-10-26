@@ -1,4 +1,4 @@
-/* ClearCommit Teams — runtime configuration.
+﻿/* ClearCommit Teams — runtime configuration.
  *
  * This file is the only thing a deployment needs to change. Leave the value
  * empty for local use; the client falls back to http://127.0.0.1:8770.
@@ -9,4 +9,4 @@
  * Never put a secret, a service-role key, or a token here: this file is
  * served to the browser.
  */
-window.CLEARCOMMIT_API_BASE = "";
+window.CLEARCOMMIT_API_BASE = "https://clearcommit-teams-api.onrender.com";

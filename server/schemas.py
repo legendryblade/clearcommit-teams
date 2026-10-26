@@ -1,4 +1,4 @@
-"""Request schemas (Pydantic v2). Responses are built as envelope dicts."""
+﻿"""Request schemas (Pydantic v2). Responses are built as envelope dicts."""
 
 from __future__ import annotations
 
@@ -32,6 +32,9 @@ class InvitationAcceptRequest(BaseModel):
 class ConversationCreateRequest(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     language: str = Field(default="en", max_length=12)
+    # Stable identifier from the client so a retry cannot create a duplicate.
+    client_ref: str | None = Field(default=None, max_length=120)
+    source: str = Field(default="manual", pattern="^(manual|import|sample|desktop)$")
 
 
 class UtteranceIn(BaseModel):

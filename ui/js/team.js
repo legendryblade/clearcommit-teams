@@ -96,6 +96,7 @@
       }
       announce("", null);
       render();
+      if (window.ClearCommitSyncStateChanged) window.ClearCommitSyncStateChanged();
     } catch (error) {
       if (generation !== state.sessionGeneration) return;
       if (error.code === "network_error") {
@@ -124,6 +125,11 @@
     try {
       const local = localBridge();
       if (!local) return;
+      // Upload an open guest conversation before the workspace changes,
+      // otherwise the switch hides it and the work looks lost.
+      if (state.localWorkspaceKey === null && window.ClearCommitBeforeWorkspaceSwitch) {
+        await window.ClearCommitBeforeWorkspaceSwitch();
+      }
       await local.call("use_workspace", { account_key: key });
       state.localWorkspaceKey = key;
       if (window.ClearCommitLocalWorkspaceChanged) window.ClearCommitLocalWorkspaceChanged();

@@ -49,6 +49,23 @@ def create_organization(
     }
 
 
+@router.post("/api/workspace")
+def ensure_personal_workspace(
+    principal: Principal = Depends(get_provisioned_principal),
+    session: Session = Depends(get_session),
+):
+    """Return the caller's personal workspace, creating it on first use.
+
+    Idempotent: calling it repeatedly never creates a second workspace.
+    """
+    from ..personal import ensure_personal_organization
+
+    profile = session.get(Profile, principal.user_id)
+    display = profile.display_name if profile is not None else ""
+    org = ensure_personal_organization(session, principal.user_id, display)
+    return {"ok": True, "data": {**organization_brief(org), "role": "owner"}}
+
+
 @router.get("/api/orgs")
 def list_my_organizations(
     principal: Principal = Depends(get_provisioned_principal),

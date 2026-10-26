@@ -1,4 +1,4 @@
-"""Serialization helpers for API payloads."""
+﻿"""Serialization helpers for API payloads."""
 
 from __future__ import annotations
 
@@ -31,7 +31,12 @@ def profile_brief(profile: Profile) -> dict:
 
 
 def organization_brief(org: Organization) -> dict:
-    return {"org_id": org.id, "name": org.name, "created_at": _iso(org.created_at)}
+    return {
+        "org_id": org.id,
+        "name": org.name,
+        "created_at": _iso(org.created_at),
+        "is_personal": bool(getattr(org, "is_personal", False)),
+    }
 
 
 def membership_brief(membership: Membership, profile: Profile | None = None) -> dict:
@@ -69,6 +74,8 @@ def conversation_brief(conversation: Conversation, line_count: int | None = None
         "title": conversation.title,
         "language": conversation.language,
         "visibility": conversation.visibility,
+        "source": getattr(conversation, "source", "manual"),
+        "client_ref": getattr(conversation, "client_ref", None),
         "created_at": _iso(conversation.created_at),
         "updated_at": _iso(conversation.updated_at),
     }

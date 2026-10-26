@@ -36,7 +36,12 @@ def _org_summaries(session: Session, user_id: str) -> list[dict]:
     rows = (
         session.query(Membership, Organization)
         .join(Organization, Organization.id == Membership.org_id)
-        .filter(Membership.user_id == user_id, Membership.status == "active")
+        .filter(
+            Membership.user_id == user_id,
+            Membership.status == "active",
+            # The personal workspace is surfaced separately; it is not a company.
+            Organization.is_personal.is_(False),
+        )
         .order_by(Organization.name)
         .all()
     )

@@ -50,12 +50,32 @@ def create_conversation(
     session: Session = Depends(get_session),
 ):
     require_member(session, org_id, principal.user_id)
+
+    # A repeated sync (same client_ref) returns the existing record instead of
+    # creating a duplicate.
+    if payload.client_ref:
+        existing = (
+            session.query(Conversation)
+            .filter(
+                Conversation.owner_id == principal.user_id,
+                Conversation.client_ref == payload.client_ref,
+            )
+            .one_or_none()
+        )
+        if existing is not None:
+            line_count = (
+                session.query(Utterance).filter(Utterance.conversation_id == existing.id).count()
+            )
+            return {"ok": True, "data": conversation_brief(existing, line_count=line_count)}
+
     conversation = Conversation(
         id=new_id(),
         org_id=org_id,
         owner_id=principal.user_id,
         title=payload.title.strip(),
         language=payload.language,
+        source=payload.source,
+        client_ref=(payload.client_ref or None),
     )
     session.add(conversation)
     audit(

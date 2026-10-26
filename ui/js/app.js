@@ -84,6 +84,8 @@
     deskMeta: "desk-meta",
     importButton: "import-button",
     addLineButton: "add-line-button",
+    syncButton: "sync-button",
+    syncButtonLabel: "sync-button-label",
     transcriptList: "transcript-list",
     transcriptEmpty: "transcript-empty",
     selectionCount: "selection-count",
@@ -431,6 +433,7 @@
     ui.addLineButton.disabled = !hasSession || state.busy;
     ui.importButton.title = hasSession ? "" : "Create a conversation first";
     ui.addLineButton.title = hasSession ? "" : "Create a conversation first";
+    void updateSyncButton();
   }
 
   function renderSelection() {
@@ -1808,6 +1811,29 @@
   window.ClearCommitLocalWorkspaceChanged = function () {
     void boot();
   };
+  // Signing in or out changes whether a conversation can be saved to the cloud.
+  window.ClearCommitSyncStateChanged = function () {
+    void updateSyncButton();
+  };
+
+  // Runs before the local workspace switches accounts. An open guest
+  // conversation is uploaded first so signing in does not orphan it.
+  window.ClearCommitBeforeWorkspaceSwitch = async function () {
+    if (!state.session) return;
+    const net = window.ClearCommitNet;
+    if (!net || !net.signedIn()) return;
+    try {
+      const link = await bridge.call("get_cloud_link", { session_id: state.session.id });
+      if (link.cloud_conversation_id) return;
+      await syncCurrentConversationToCloud();
+    } catch (error) {
+      showGlobalAlert(
+        "This conversation could not be saved to the cloud before switching accounts. " +
+          "It stays in the guest workspace on this device.",
+        "warn"
+      );
+    }
+  };
 
   function initOnboarding() {
     const individual = document.getElementById("choose-individual");
@@ -1829,6 +1855,95 @@
     }
   }
 
+  async function syncCurrentConversationToCloud() {
+    const net = window.ClearCommitNet;
+    const localId = state.session.id;
+    const payload = await bridge.call("transcript_payload", { session_id: localId });
+    if (!payload.utterances.length) {
+      throw new Error("This conversation has no lines to save.");
+    }
+    const workspace = await net.call("POST", "/api/workspace", {});
+    const created = await net.call("POST", "/api/orgs/" + workspace.org_id + "/conversations", {
+      title: payload.title,
+      language: payload.language,
+      client_ref: localId,
+      source: "desktop",
+    });
+    await net.call(
+      "POST",
+      "/api/orgs/" + workspace.org_id + "/conversations/" + created.conversation_id + "/utterances",
+      { utterances: payload.utterances }
+    );
+    await bridge.call("set_cloud_link", {
+      session_id: localId,
+      cloud_conversation_id: created.conversation_id,
+    });
+    return created.conversation_id;
+  }
+
+  async function saveToCloud() {
+    if (state.busy) return;
+    if (!state.session) {
+      showGlobalAlert("Open a conversation first.", "info");
+      return;
+    }
+    const net = window.ClearCommitNet;
+    if (!net || !net.signedIn()) {
+      showGlobalAlert(
+        "Sign in to the team workspace first. Your conversation stays on this device until then.",
+        "info"
+      );
+      return;
+    }
+    setBusy(true);
+    if (ui.syncButtonLabel) ui.syncButtonLabel.textContent = "Saving…";
+    try {
+      const link = await bridge.call("get_cloud_link", { session_id: state.session.id });
+      if (link.cloud_conversation_id) {
+        showGlobalAlert("This conversation is already saved to the cloud.", "info");
+        return;
+      }
+      await syncCurrentConversationToCloud();
+      showGlobalAlert(
+        "Saved to the cloud. It is private to your account until you share it.",
+        "ok"
+      );
+    } catch (error) {
+      if (error && error.code === "network_error") {
+        showGlobalAlert(
+          "The cloud is unreachable. This conversation was NOT saved to the cloud.",
+          "warn"
+        );
+      } else {
+        notifyError(error, "Could not save to the cloud");
+      }
+    } finally {
+      setBusy(false);
+      updateSyncButton();
+    }
+  }
+  async function updateSyncButton() {
+    if (!ui.syncButton) return;
+    const net = window.ClearCommitNet;
+    if (!state.session || !net || !net.signedIn()) {
+      ui.syncButton.hidden = true;
+      return;
+    }
+    ui.syncButton.hidden = false;
+    try {
+      const link = await bridge.call("get_cloud_link", { session_id: state.session.id });
+      const saved = Boolean(link.cloud_conversation_id);
+      if (ui.syncButtonLabel) {
+        ui.syncButtonLabel.textContent = saved ? "Saved to cloud" : "Save to cloud";
+      }
+      ui.syncButton.disabled = state.busy || saved;
+      ui.syncButton.title = saved
+        ? "This conversation already exists in your cloud workspace."
+        : "Save a private copy to your account.";
+    } catch (error) {
+      ui.syncButton.disabled = state.busy;
+    }
+  }
   async function loadExampleConversation() {
     if (state.busy) return;
     setBusy(true);
@@ -1935,6 +2050,9 @@
         break;
       case "open-import":
         openImport();
+        break;
+      case "save-to-cloud":
+        void saveToCloud();
         break;
       case "load-example":
         void loadExampleConversation();

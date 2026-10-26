@@ -59,6 +59,9 @@ PUBLIC_METHODS = (
     "test_provider",
     "refresh_preview",
     "use_workspace",
+    "get_cloud_link",
+    "set_cloud_link",
+    "transcript_payload",
 )
 
 
@@ -333,6 +336,52 @@ class Bridge:
 
     def refresh_preview(self, payload: Any = None) -> dict:
         return self._execute("refresh_preview", lambda _: self.repo.preview(), payload)
+
+    def get_cloud_link(self, payload: Any = None) -> dict:
+        return self._execute("get_cloud_link", self._get_cloud_link, payload)
+
+    def _get_cloud_link(self, payload: Mapping[str, Any]) -> dict:
+        session_id = _required_id(payload, "session_id", "A conversation ID")
+        value = self.db.get_meta("cloud:" + session_id, "")
+        return {"session_id": session_id, "cloud_conversation_id": value or None}
+
+    def set_cloud_link(self, payload: Any = None) -> dict:
+        return self._execute("set_cloud_link", self._set_cloud_link, payload)
+
+    def _set_cloud_link(self, payload: Mapping[str, Any]) -> dict:
+        session_id = _required_id(payload, "session_id", "A conversation ID")
+        cloud_id = str(payload.get("cloud_conversation_id") or "").strip()
+        if not cloud_id:
+            raise ValidationError("A cloud conversation ID is required.")
+        if len(cloud_id) > 64:
+            raise ValidationError("That cloud conversation ID is too long.")
+        self.db.set_meta("cloud:" + session_id, cloud_id)
+        return {"session_id": session_id, "cloud_conversation_id": cloud_id}
+
+    def transcript_payload(self, payload: Any = None) -> dict:
+        return self._execute("transcript_payload", self._transcript_payload, payload)
+
+    def _transcript_payload(self, payload: Mapping[str, Any]) -> dict:
+        """Everything needed to create the cloud record, in one read."""
+        session_id = _required_id(payload, "session_id", "A conversation ID")
+        detail = self.repo.get_session(session_id)
+        session = detail["session"]
+        lines = detail["utterances"]
+        return {
+            "session_id": session_id,
+            "title": session["title"],
+            "language": session.get("customer_language") or "en",
+            "utterances": [
+                {
+                    "speaker": "customer" if row.get("speaker") == "customer" else "rep",
+                    "content": row.get("original_text") or row.get("text") or "",
+                    "lang": row.get("language") or session.get("customer_language") or "en",
+                    "translation": row.get("translation") or None,
+                }
+                for row in lines
+                if (row.get("original_text") or row.get("text"))
+            ],
+        }
 
     def use_workspace(self, payload: Any = None) -> dict:
         return self._execute("use_workspace", self._use_workspace, payload)

@@ -1,4 +1,4 @@
-/* ClearCommit Teams bridge client.
+﻿/* ClearCommit Teams bridge client.
  *
  * The same transport is used by the pywebview desktop shell (window.pywebview.api)
  * and the loopback development server (POST /api/<method>). Every reply must be a
@@ -39,6 +39,9 @@
     "test_provider",
     "refresh_preview",
     "use_workspace",
+    "get_cloud_link",
+    "set_cloud_link",
+    "transcript_payload",
   ]);
 
   const METHOD_SET = new Set(METHODS);

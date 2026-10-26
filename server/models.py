@@ -1,4 +1,4 @@
-"""SQLAlchemy models shared by demo (SQLite) and Supabase (PostgreSQL) modes.
+﻿"""SQLAlchemy models shared by demo (SQLite) and Supabase (PostgreSQL) modes.
 
 Every organization-owned record carries org_id. Authorization is enforced in
 the API layer; the supabase/migrations SQL mirrors this schema on PostgreSQL
@@ -11,6 +11,7 @@ import uuid
 from datetime import datetime, timezone
 
 from sqlalchemy import (
+    Boolean,
     DateTime,
     ForeignKey,
     Index,
@@ -50,6 +51,9 @@ class Organization(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     name: Mapped[str] = mapped_column(String(160))
     created_by: Mapped[str] = mapped_column(String(36), ForeignKey("profiles.id"))
+    # A personal workspace is an organization of one, so membership, audit and
+    # RLS apply unchanged without inventing a second tenancy system.
+    is_personal: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
@@ -89,11 +93,16 @@ class Conversation(Base):
     __table_args__ = (Index("ix_conversations_org_owner", "org_id", "owner_id"),)
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    org_id: Mapped[str] = mapped_column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"))
+    # NULL for a personal record: an individual needs no organization.
+    org_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=True
+    )
     owner_id: Mapped[str] = mapped_column(String(36), ForeignKey("profiles.id"))
     title: Mapped[str] = mapped_column(String(200))
     language: Mapped[str] = mapped_column(String(12), default="en")
     visibility: Mapped[str] = mapped_column(String(20), default="private")
+    source: Mapped[str] = mapped_column(String(20), default="manual")
+    client_ref: Mapped[str | None] = mapped_column(String(120), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 

@@ -1,4 +1,4 @@
-"""Authentication primitives.
+﻿"""Authentication primitives.
 
 - demo mode: this server issues and verifies its own signed tokens and stores
   scrypt password hashes locally. Local demo flow only, labeled as such.
@@ -35,6 +35,7 @@ class Principal:
     user_id: str
     email: str
     mode: str
+    email_verified: bool = False
 
 
 def _demo_secret_path(settings: Settings):
@@ -119,7 +120,20 @@ class TokenService:
         email = str(claims.get("email") or "").strip()
         if not sub:
             raise AuthError("invalid_token", "The session token carries no subject.")
-        return Principal(user_id=sub, email=email, mode=self.settings.mode)
+        # Supabase puts verification inside user_metadata for email signups;
+        # demo tokens are issued by this server and are trusted as verified.
+        verified = True if self.settings.mode == "demo" else False
+        try:
+            meta = claims.get("user_metadata") or {}
+            if isinstance(meta, dict) and "email_verified" in meta:
+                verified = bool(meta.get("email_verified"))
+            elif "email_verified" in claims:
+                verified = bool(claims.get("email_verified"))
+        except Exception:
+            verified = False
+        return Principal(
+            user_id=sub, email=email, mode=self.settings.mode, email_verified=verified
+        )
 
     def _verify_supabase(self, token: str) -> dict:
         options = {"require": ["exp", "sub"]}

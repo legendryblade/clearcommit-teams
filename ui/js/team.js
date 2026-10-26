@@ -34,6 +34,7 @@
     lastEvent: null,
     sessionGeneration: 0,
     localWorkspaceKey: null,
+    pendingInvitations: [],
   };
 
   let socket = null;
@@ -87,6 +88,7 @@
       setOffline(false);
       await useLocalWorkspaceFor(me.profile.user_id);
       state.organizations = me.organizations || [];
+      await loadMyInvitations();
       if (!state.orgId || !state.organizations.some(function (o) { return o.org_id === state.orgId; })) {
         state.orgId = state.organizations.length ? state.organizations[0].org_id : null;
       }
@@ -343,7 +345,7 @@
       });
       dom.inviteEmail.value = "";
       announce(
-        "Invitation recorded for " + email + ". Share the invitation id with them; no email is sent.",
+        "Added " + email + ". They will see the invitation automatically after signing in with that address.",
         "ok"
       );
       await refreshOrgData();
@@ -367,6 +369,35 @@
       await refreshAll();
     } catch (error) {
       failure(error, "That action failed.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Discover invitations addressed to the verified account email, so the
+  // employee never has to copy an invitation id.
+  async function loadMyInvitations() {
+    try {
+      const mine = await net.call("GET", "/api/invitations/mine");
+      state.pendingInvitations = mine.invitations || [];
+    } catch (error) {
+      state.pendingInvitations = [];
+    }
+    return state.pendingInvitations;
+  }
+
+  async function joinInvitation(invitation) {
+    setBusy(true);
+    try {
+      const membership = await net.call("POST", "/api/invitations/accept", {
+        invitation_id: invitation.invitation_id,
+      });
+      state.orgId = membership.org_id;
+      announce("Joined " + membership.organization.name + " as " + roleLabel(membership.role) + ".", "ok");
+      resubscribe();
+      await refreshAll();
+    } catch (error) {
+      failure(error, "Could not join that organization.");
     } finally {
       setBusy(false);
     }
@@ -710,9 +741,33 @@
       void createOrg(event);
     });
     card.append(form);
-    card.append(button("Accept a pending invitation", "button-quiet", function () {
-      void acceptPendingMine();
-    }));
+
+    // Invitations addressed to this account's verified email. The employee
+    // does not copy an id: the server matched the invitation to the token.
+    if (state.pendingInvitations && state.pendingInvitations.length) {
+      card.append(el("p", "team-card-note", "You have been invited to join:"));
+      const invites = el("div", "team-list");
+      state.pendingInvitations.forEach(function (invitation) {
+        const row = el("div", "team-row is-draft");
+        row.append(
+          el("span", "team-row-title", invitation.organization ? invitation.organization.name : "An organization")
+        );
+        row.append(el("span", "team-row-meta", "Role: " + roleLabel(invitation.role)));
+        row.append(button("Join", "button-primary", function () {
+          void joinInvitation(invitation);
+        }));
+        invites.append(row);
+      });
+      card.append(invites);
+    } else if (!state.organizations.length) {
+      card.append(
+        el(
+          "p",
+          "team-scope-note",
+          "Ask a manager to add this email address, then refresh. Invitations appear here automatically."
+        )
+      );
+    }
     return card;
   }
 
@@ -865,7 +920,7 @@
         option.value = role;
         dom.inviteRole.append(option);
       });
-      const submit = el("button", "button button-quiet", "Record invitation");
+      const submit = el("button", "button button-quiet", "Add employee");
       submit.type = "submit";
       form.append(dom.inviteEmail, dom.inviteRole, submit);
       form.addEventListener("submit", function (event) {
@@ -884,7 +939,7 @@
         card.append(invites);
       }
       card.append(
-        el("p", "team-scope-note", "No email is sent. Pass the invitation id to the teammate so they can accept it.")
+        el("p", "team-scope-note", "They join by signing in with this email. No message is sent and no code needs sharing.")
       );
     }
     return card;

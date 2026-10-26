@@ -222,6 +222,12 @@ def accept_invitation(
         raise ApiError("invitation_not_pending", "That invitation is not open.", 404)
     if (principal.email or "").strip().lower() != invitation.email:
         raise ApiError("not_your_invitation", "This invitation was issued to a different email.", 403)
+    if not principal.email_verified:
+        raise ApiError(
+            "email_not_verified",
+            "Confirm your email address before joining an organization.",
+            403,
+        )
 
     membership = (
         session.query(Membership)

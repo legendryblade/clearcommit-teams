@@ -95,6 +95,71 @@ def list_microphones() -> list[tuple[int, str]]:
     return _list()
 
 
+def _host_api_name(sd, index: int) -> str:
+    try:
+        return str(sd.query_hostapis(sd.query_devices(index)["hostapi"])["name"])
+    except Exception:
+        return ""
+
+
+def probe_microphones(seconds: float = 0.35) -> list[tuple[int, str, int]]:
+    """Measure each input's live level: (index, name, peak).
+
+    A machine commonly has several inputs and the Windows default is often a
+    silent one. Measuring a short sample lets the app offer the microphones
+    that actually work first, instead of a device that hears nothing.
+    """
+    _require()
+    import numpy as np
+    import sounddevice as sd
+
+    measured: list[tuple[int, str, int]] = []
+    for index, device in enumerate(sd.query_devices()):
+        if device.get("max_input_channels", 0) < 1:
+            continue
+        # WDM-KS devices can be opened once for a one-shot recording but cannot
+        # stream, so they are not usable for live capture. Only consider host
+        # APIs that actually support streaming.
+        if "WDM-KS" in _host_api_name(sd, index):
+            continue
+        rate = int(device.get("default_samplerate", 16000) or 16000)
+        try:
+            recording = sd.rec(
+                int(rate * seconds),
+                samplerate=rate,
+                channels=1,
+                dtype="int16",
+                device=index,
+            )
+            sd.wait()
+            peak = int(np.abs(recording).max())
+        except Exception:
+            continue
+        measured.append((index, str(device["name"]), peak))
+    return measured
+
+
+def preferred_microphone(threshold: int = 300) -> int | None:
+    """The best working physical microphone.
+
+    Virtual devices (VB-Audio, sound mapper, stereo mix) are ranked last: they
+    are useful for routing but are not what a person expects to speak into.
+    """
+    measured = [m for m in probe_microphones() if m[2] >= threshold]
+    if not measured:
+        return None
+
+    def rank(entry: tuple[int, str, int]) -> tuple[int, int]:
+        name = entry[1].lower()
+        virtual = any(
+            key in name
+            for key in ("vb-audio", "cable", "sound mapper", "primary sound", "stereo mix", "point")
+        )
+        return (1 if virtual else 0, -entry[2])
+
+    return sorted(measured, key=rank)[0][0]
+
+
 def list_output_devices() -> list[tuple[int, str, int, int]]:
     _require()
     from .mic import list_audio_devices as _list

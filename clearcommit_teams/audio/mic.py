@@ -54,7 +54,9 @@ class MicCapture:
         self._stream = None
         self._dev_rate = None  # actual capture rate (set in start)
         self.last_rms = 0.0  # live input level for the GUI meter
-        self.cb_count = 0    # increments per audio callback (watchdog liveness)
+        self.cb_count = 0
+        self._reader = None
+        self._thread = None    # increments per audio callback (watchdog liveness)
 
     # ------------------------------------------------------------------ #
     @staticmethod
@@ -190,10 +192,13 @@ class MicCapture:
 
     # ------------------------------------------------------------------ #
     def start(self) -> "MicCapture":
-        import sounddevice as sd  # lazy import; only needed at runtime
+        import sounddevice as sd
+        import threading
 
-        # Open at the device's native/default rate (many Windows devices reject
-        # 16000 Hz) and resample to 16 kHz in the callback for Whisper.
+        # Some Windows devices (WASAPI array mics, virtual cables) open
+        # successfully but never deliver callback audio. A short probe decides
+        # which path to use: callbacks where they work, otherwise a worker
+        # thread doing blocking reads, which works on every device seen so far.
         dev_rate = self.rate
         if self.device is not None:
             try:
@@ -202,17 +207,70 @@ class MicCapture:
                 dev_rate = self.rate
         self._dev_rate = dev_rate
 
-        self._stream = sd.InputStream(
+        if self._callbacks_work(sd, dev_rate):
+            self._stream = sd.InputStream(
+                samplerate=dev_rate,
+                channels=1,
+                dtype="int16",
+                blocksize=int(dev_rate * self.chunk_ms / 1000),
+                device=self.device,
+                callback=self._callback,
+            )
+            self._stream.start()
+            return self
+
+        self._reader = sd.RawInputStream(
             samplerate=dev_rate,
             channels=1,
             dtype="int16",
             blocksize=int(dev_rate * self.chunk_ms / 1000),
             device=self.device,
-            callback=self._callback,
         )
-        self._stream.start()
+        self._reader.start()
+        self._thread = threading.Thread(target=self._read_loop, daemon=True)
+        self._thread.start()
         return self
 
+    def _callbacks_work(self, sd, rate: int) -> bool:
+        """Open a throwaway stream and see whether any audio arrives."""
+        import time
+
+        seen = {"n": 0}
+
+        def probe(indata, frames, t, status):
+            seen["n"] += 1
+
+        try:
+            test = sd.InputStream(
+                samplerate=rate,
+                channels=1,
+                dtype="int16",
+                blocksize=int(rate * self.chunk_ms / 1000),
+                device=self.device,
+                callback=probe,
+            )
+            test.start()
+            time.sleep(0.25)
+            test.stop()
+            test.close()
+        except Exception:
+            return False
+        return seen["n"] > 0
+
+    def _read_loop(self) -> None:
+        import numpy as np
+
+        block = int(self._dev_rate * self.chunk_ms / 1000)
+        while not self._stop and self._reader is not None:
+            try:
+                data, overflowed = self._reader.read(block)
+            except Exception:
+                break
+            samples = np.frombuffer(data, dtype=np.int16)
+            rms = float(np.sqrt(np.mean(samples.astype(np.float32) ** 2)) / 32768.0)
+            self.last_rms = rms
+            self.cb_count += 1
+            self._process(samples, rms)
     def stop(self) -> None:
         self._stop = True
         if self._stream is not None:

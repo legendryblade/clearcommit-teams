@@ -485,16 +485,26 @@ class Bridge:
         return self._execute("audio_devices", self._audio_devices, payload)
 
     def _audio_devices(self, _payload: Mapping[str, Any]) -> dict:
-        from .audio import availability, list_microphones, loopback_devices
+        from .audio import (
+            availability,
+            loopback_devices,
+            preferred_microphone,
+            probe_microphones,
+        )
 
         state = availability()
         if not state.available:
             return {"available": False, "detail": state.detail, "microphones": [], "outputs": []}
+        # Probe each input so the UI can rank the ones that hear sound first. A
+        # silent Windows default is the usual reason capture produces nothing.
+        measured = probe_microphones()
+        measured.sort(key=lambda row: -row[2])
         return {
             "available": True,
             "detail": state.detail,
+            "preferred_microphone": preferred_microphone(),
             "microphones": [
-                {"index": idx, "name": name} for idx, name in list_microphones()
+                {"index": idx, "name": name, "peak": peak} for idx, name, peak in measured
             ],
             # Only WASAPI loopback endpoints capture what the machine plays, so
             # these are the only valid choices for the "call audio" side.

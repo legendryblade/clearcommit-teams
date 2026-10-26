@@ -72,6 +72,31 @@
     return membership && (membership.role === "owner" || membership.role === "manager");
   }
 
+  // A hosted free-tier service sleeps. Waking it can take 30+ seconds, so a
+  // single failed request is not "offline" — it may be a cold start. Try a few
+  // times with honest copy before giving up.
+  async function callWithWakeup(method, path, body) {
+    const delays = [0, 2000, 4000, 8000, 12000];
+    let lastError = null;
+    for (let attempt = 0; attempt < delays.length; attempt++) {
+      if (delays[attempt]) await new Promise(function (r) { setTimeout(r, delays[attempt]); });
+      try {
+        return await net.call(method, path, body);
+      } catch (error) {
+        lastError = error;
+        const retryable = error.code === "network_error" || error.code === "bad_response";
+        if (!retryable) throw error;
+        if (attempt < delays.length - 1) {
+          announce(
+            "Connecting to the server… the first load can take up to 30 seconds.",
+            "warn"
+          );
+        }
+      }
+    }
+    throw lastError;
+  }
+
   async function refreshAll() {
     if (!net.signedIn()) {
       state.me = null;
@@ -82,7 +107,7 @@
     // an account switch and painting stale account data into the new session.
     const generation = ++state.sessionGeneration;
     try {
-      const me = await net.call("GET", "/api/auth/me");
+      const me = await callWithWakeup("GET", "/api/auth/me");
       if (generation !== state.sessionGeneration) return;
       state.me = me;
       setOffline(false);
@@ -1047,6 +1072,9 @@
   }
 
   function init() {
+    // Start waking a sleeping hosted backend immediately, before the user
+    // reaches the sign-in form.
+    if (window.ClearCommitNet) void window.ClearCommitNet.health();
     dom.root = document.getElementById("team-root");
     dom.notice = document.getElementById("team-notice");
     dom.live = document.getElementById("team-live");

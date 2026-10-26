@@ -1081,29 +1081,72 @@
     return card;
   }
 
-  function renderSignedIn() {
-    const header = el("div", "team-header");
-    const who = el("div", "team-who");
-    who.append(el("span", "team-who-name", (state.me && state.me.profile.display_name) || "Signed in"));
-    who.append(el("span", "team-who-mail", (state.me && state.me.profile.email) || ""));
-    header.append(who);
-    header.append(button("Sign out", "button-quiet", signOut));
-    header.append(button("Refresh", "button-quiet", function () {
-      void refreshAll();
-    }));
-
-    const grid = el("div", "team-grid");
-    grid.append(
-      renderOverview(),
-      renderOrgPicker(),
-      renderConversations(),
-      renderInsights(),
-      renderPlaybook(),
-      renderTeam()
-    );
-    return [header, grid];
+  function activeOrg() {
+    return (state.organizations || []).find(function (o) {
+      return o.org_id === state.orgId;
+    }) || null;
   }
 
+  function initials(text) {
+    return String(text || "?")
+      .split(/[\s@._-]+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map(function (part) { return part[0].toUpperCase(); })
+      .join("");
+  }
+
+  // A real profile bar: who you are, which company you are acting in, and your
+  // role there. Without it the page reads as cards with no owner.
+  function renderProfileBar() {
+    const bar = el("div", "profile-bar");
+    const profile = (state.me && state.me.profile) || {};
+    const org = activeOrg();
+
+    const identity = el("div", "profile-identity");
+    identity.append(el("span", "profile-avatar", initials(profile.display_name)));
+    const names = el("div", "profile-names");
+    names.append(el("span", "profile-name", profile.display_name || "Signed in"));
+    names.append(el("span", "profile-mail", profile.email || ""));
+    identity.append(names);
+
+    const context = el("div", "profile-context");
+    if (org) {
+      context.append(el("span", "profile-org", org.name));
+      context.append(el("span", "profile-role is-" + org.role, roleLabel(org.role)));
+      if (org.join_code) {
+        const code = el("code", "profile-code", org.join_code);
+        code.title = "Share this code to invite a teammate";
+        context.append(code);
+      }
+    } else {
+      context.append(el("span", "profile-org is-empty", "No company yet"));
+    }
+
+    const actions = el("div", "profile-actions");
+    actions.append(button("Refresh", "button-quiet", function () { void refreshAll(); }));
+    actions.append(button("Sign out", "button-quiet", signOut));
+
+    bar.append(identity, context, actions);
+    return bar;
+  }
+
+  function renderSignedIn() {
+    const grid = el("div", "team-grid");
+    if (!state.organizations.length) {
+      grid.append(renderOrgPicker());
+    } else {
+      grid.append(
+        renderOrgPicker(),
+        renderOverview(),
+        renderConversations(),
+        renderInsights(),
+        renderPlaybook(),
+        renderTeam()
+      );
+    }
+    return [renderProfileBar(), grid];
+  }
   function render() {
     if (!dom.root) return;
     clear(dom.root);

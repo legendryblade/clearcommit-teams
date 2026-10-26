@@ -3442,3 +3442,84 @@ body[data-busy="true"] .status-light {
   text-transform: uppercase;
   color: var(--gold);
 }
+
+/* Web build: controls that require the desktop bridge are not offered. */
+body.is-web [data-action="load-example"],
+body.is-web [data-action="new-session"],
+body.is-web [data-action="open-import"],
+body.is-web [data-action="open-add-line"],
+body.is-web [data-action="save-to-cloud"],
+body.is-web #capture-panel,
+body.is-web [data-view="desk"],
+body.is-web [data-view="coach"],
+body.is-web [data-view="playbook"],
+body.is-web [data-view="signals"] {
+  display: none !important;
+}
+
+/* In the web build the team workspace is the product, so make it the view. */
+body.is-web .rail-workspaces .workspace-link:not([data-view="team"]) {
+  display: none;
+}
+body.is-web .rail-conversations {
+  display: none;
+}
+
+/* Profile bar — identity and company context, above everything else */
+.profile-bar {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+  padding: 14px 18px;
+  margin-bottom: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--card-strong);
+  box-shadow: var(--shadow-card);
+}
+
+.profile-identity { display: flex; align-items: center; gap: 12px; min-width: 220px; }
+.profile-avatar {
+  display: grid;
+  place-items: center;
+  width: 42px; height: 42px;
+  border-radius: 50%;
+  background: var(--rail);
+  color: var(--rail-text);
+  font-family: var(--font-display);
+  font-size: 15px;
+  letter-spacing: 0.04em;
+}
+.profile-names { display: grid; gap: 1px; }
+.profile-name { font-weight: 650; color: var(--ink); font-size: 15px; }
+.profile-mail { color: var(--ink-faint); font-size: 12.5px; }
+
+.profile-context {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding-left: 18px; border-left: 1px solid var(--line);
+  margin-right: auto;
+}
+.profile-org { font-family: var(--font-display); font-size: 16px; color: var(--ink); }
+.profile-org.is-empty { color: var(--ink-faint); font-size: 13.5px; font-family: var(--font-ui); }
+.profile-role {
+  padding: 2px 9px; border-radius: 999px; font-size: 10.5px;
+  letter-spacing: 0.05em; text-transform: uppercase;
+  border: 1px solid var(--line-strong); color: var(--ink-soft);
+}
+.profile-role.is-owner { border-color: var(--teal); color: var(--teal); background: var(--teal-soft); }
+.profile-role.is-manager { border-color: var(--gold); color: var(--gold); background: var(--gold-soft); }
+.profile-code {
+  font-family: ui-monospace, Consolas, monospace; font-size: 11.5px;
+  padding: 2px 7px; border-radius: 6px;
+  background: var(--paper-deep); color: var(--ink-soft); letter-spacing: 0.1em;
+}
+.profile-actions { display: flex; gap: 8px; }
+
+/* Session list: the row holds the item and its manage actions */
+.session-row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 4px; }
+.session-menu { display: flex; gap: 2px; opacity: 0; transition: opacity 120ms ease; }
+.session-row:hover .session-menu,
+.session-row:focus-within .session-menu { opacity: 1; }
+.mini-button.is-danger { color: var(--red); }
+.mini-button.is-danger:hover { border-color: var(--red); background: var(--signal-soft); }

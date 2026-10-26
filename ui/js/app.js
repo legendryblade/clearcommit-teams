@@ -531,11 +531,69 @@
       meta.append(el("span", "", plural(item.utterance_count, "line", "lines")));
       if (item.language_pair) meta.append(el("span", "", item.language_pair));
       button.append(top, meta);
+
+      // Manage the conversation without opening it.
+      const row = el("div", "session-row");
+      const menu = el("div", "session-menu");
+      const rename = el("button", "mini-button", "Rename");
+      rename.type = "button";
+      rename.title = "Rename this conversation";
+      rename.addEventListener("click", function (event) {
+        event.stopPropagation();
+        void renameSession(item);
+      });
+      const remove = el("button", "mini-button is-danger", "Delete");
+      remove.type = "button";
+      remove.title = "Delete this conversation";
+      remove.addEventListener("click", function (event) {
+        event.stopPropagation();
+        void deleteSession(item);
+      });
+      menu.append(rename, remove);
+      row.append(button, menu);
+
       button.addEventListener("click", function () {
         void selectSession(item.id);
       });
-      ui.sessionList.append(button);
+      ui.sessionList.append(row);
     });
+  }
+
+  async function renameSession(item) {
+    const next = window.prompt("Rename this conversation", item.title);
+    if (next === null) return;
+    const title = next.trim();
+    if (!title || title === item.title) return;
+    try {
+      await bridge.call("rename_session", { session_id: item.id, title: title });
+      await loadSessions();
+      if (state.session && state.session.id === item.id) await selectSession(item.id);
+      showGlobalAlert("Conversation renamed.", "ok");
+    } catch (error) {
+      notifyError(error, "Could not rename the conversation");
+    }
+  }
+
+  async function deleteSession(item) {
+    const confirmed = window.confirm(
+      "Delete \"" + item.title + "\"? Its transcript and coaching are removed from this workspace."
+    );
+    if (!confirmed) return;
+    try {
+      await bridge.call("delete_session", { session_id: item.id });
+      if (state.session && state.session.id === item.id) {
+        state.session = null;
+        state.utterances = [];
+        state.insights = [];
+        state.selection = new Set();
+        clear(ui.transcriptList);
+        renderDesk();
+      }
+      await loadSessions();
+      showGlobalAlert("Conversation deleted.", "ok");
+    } catch (error) {
+      notifyError(error, "Could not delete the conversation");
+    }
   }
 
   async function loadSessions() {
@@ -1827,6 +1885,15 @@
   }
 
   function chooseMode(mode) {
+    // The web build only has the team workspace; the personal workspace is a
+    // local app. Say so instead of opening an empty desk.
+    if (mode === "individual" && !isDesktopShell()) {
+      showGlobalAlert(
+        "The private personal workspace runs in the Windows app. On the web you can use your team workspace.",
+        "info"
+      );
+      mode = "company";
+    }
     writeMode(mode);
     applyMode(mode);
     closeOnboarding();
@@ -2353,12 +2420,20 @@
         if (window.ClearCommitTeamView) window.ClearCommitTeamView.refresh();
         // A first-time visitor still needs to understand the product. The
         // choice is offered here too, with the desktop option explained.
+        applyWebMode();
         if (!readMode()) openOnboarding();
         return;
       }
       ui.bootMessage.textContent = errorTitle(error) + ": " + describeError(error);
       ui.bootRetry.hidden = false;
     }
+  }
+
+  // Hide controls that need the local Python bridge. In a browser they can
+  // only fail, so they should not be offered at all.
+  function applyWebMode() {
+    if (isDesktopShell()) return;
+    document.body.classList.add("is-web");
   }
 
   function isDesktopShell() {
@@ -2496,6 +2571,7 @@
     renderSelection();
     renderAssistantNotes();
     initOnboarding();
+    applyWebMode();
     void initCapture();
     void initInterpretation();
     if (ui.captureSource) {

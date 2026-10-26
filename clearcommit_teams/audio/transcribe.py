@@ -56,7 +56,7 @@ def provider_status() -> dict:
     return {
         "provider": "groq-whisper",
         "configured": bool(groq),
-        "model": "whisper-large-v3-turbo",
+        "model": "whisper-large-v3",
         "detail": (
             "Groq Whisper is configured."
             if groq
@@ -78,7 +78,7 @@ def provider_status() -> dict:
 class GroqTranscriber:
     name = "groq-whisper"
 
-    def __init__(self, api_key: str | None = None, model: str = "whisper-large-v3-turbo"):
+    def __init__(self, api_key: str | None = None, model: str = "whisper-large-v3"):
         self.api_key = api_key or groq_key()
         self.model = model
         if not self.api_key:

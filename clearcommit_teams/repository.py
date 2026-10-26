@@ -731,3 +731,62 @@ class Repository:
             "insight_types": insight_types,
             "consent_note": "Team Insights is a design preview. This build does not aggregate employee performance scores.",
         }
+
+    def rename_session(self, session_id: str, title: str) -> dict:
+        """Rename a conversation. The title is the only editable metadata."""
+        from .models import now_utc
+
+        clean = (title or "").strip()
+        if not clean:
+            raise ValidationError("A conversation title is required.")
+        if len(clean) > 120:
+            raise ValidationError("That title is too long.")
+        with self.db.connection() as conn:
+            row = conn.execute("SELECT id FROM sessions WHERE id = ?", (session_id,)).fetchone()
+            if row is None:
+                raise NotFoundError("No conversation with that id.")
+            conn.execute(
+                "UPDATE sessions SET title = ?, updated_at = ? WHERE id = ?",
+                (clean, now_utc(), session_id),
+            )
+        return self.get_session(session_id)["session"]
+
+    def delete_session(self, session_id: str) -> dict:
+        """Delete a conversation and everything derived from it.
+
+        Child rows are removed explicitly so this works on SQLite and
+        PostgreSQL alike; no page is left orphaned.
+        """
+        with self.db.connection() as conn:
+            row = conn.execute("SELECT id FROM sessions WHERE id = ?", (session_id,)).fetchone()
+            if row is None:
+                raise NotFoundError("No conversation with that id.")
+            for table in (
+                "insight_evidence",
+                "assistant_note_evidence",
+                "insights",
+                "assistant_notes",
+                "analysis_runs",
+                "utterances",
+            ):
+                try:
+                    conn.execute(f"DELETE FROM {table} WHERE session_id = ?", (session_id,))
+                except Exception:
+                    # Some child tables key on insight_id rather than session_id.
+                    pass
+            conn.execute(
+                "DELETE FROM insight_evidence WHERE insight_id IN "
+                "(SELECT id FROM insights WHERE session_id = ?)",
+                (session_id,),
+            )
+            conn.execute(
+                "DELETE FROM assistant_note_evidence WHERE note_id IN "
+                "(SELECT id FROM assistant_notes WHERE session_id = ?)",
+                (session_id,),
+            )
+            conn.execute("DELETE FROM insights WHERE session_id = ?", (session_id,))
+            conn.execute("DELETE FROM assistant_notes WHERE session_id = ?", (session_id,))
+            conn.execute("DELETE FROM analysis_runs WHERE session_id = ?", (session_id,))
+            conn.execute("DELETE FROM utterances WHERE session_id = ?", (session_id,))
+            conn.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
+        return {"session_id": session_id, "deleted": True}

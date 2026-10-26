@@ -42,6 +42,8 @@ PUBLIC_METHODS = (
     "list_sessions",
     "get_session",
     "create_session",
+    "rename_session",
+    "delete_session",
     "add_utterance",
     "import_transcript",
     "list_insights",
@@ -204,6 +206,23 @@ class Bridge:
 
     def _create_session(self, payload: Mapping[str, Any]) -> dict:
         return self.repo.create_session(payload, source="manual")
+
+    def rename_session(self, payload: Any = None) -> dict:
+        return self._execute("rename_session", self._rename_session, payload)
+
+    def _rename_session(self, payload: Mapping[str, Any]) -> dict:
+        session_id = _required_id(payload, "session_id", "A conversation ID")
+        title = payload.get("title")
+        if not isinstance(title, str):
+            raise ValidationError("A conversation title is required.")
+        return self.repo.rename_session(session_id, title)
+
+    def delete_session(self, payload: Any = None) -> dict:
+        return self._execute("delete_session", self._delete_session, payload)
+
+    def _delete_session(self, payload: Mapping[str, Any]) -> dict:
+        session_id = _required_id(payload, "session_id", "A conversation ID")
+        return self.repo.delete_session(session_id)
 
     def add_utterance(self, payload: Any = None) -> dict:
         return self._execute("add_utterance", self._add_utterance, payload)

@@ -1,4 +1,4 @@
-"""Provider selection and honest configuration status."""
+﻿"""Provider selection and honest configuration status."""
 
 from __future__ import annotations
 
@@ -12,6 +12,10 @@ from .mock import MockCoachProvider
 from .openai_compat import HttpTransport, OpenAICompatibleConfig, OpenAICompatibleProvider
 
 API_KEY_ENV = "CLEARCOMMIT_TEAMS_API_KEY"
+# A GROQ key is accepted directly, so the documented provider env works too.
+FALLBACK_KEY_ENVS = ("GROQ_API_KEY",)
+GROQ_BASE_URL = "https://api.groq.com/openai/v1"
+GROQ_MODEL = "openai/gpt-oss-20b"
 
 
 @dataclass(frozen=True)
@@ -37,11 +41,28 @@ class ProviderSettings:
 
 def _api_key(env: Mapping[str, str] | None) -> str:
     source = os.environ if env is None else env
-    return str(source.get(API_KEY_ENV, "") or "").strip()
+    primary = str(source.get(API_KEY_ENV, "") or "").strip()
+    if primary:
+        return primary
+    for name in FALLBACK_KEY_ENVS:
+        value = str(source.get(name, "") or "").strip()
+        if value:
+            return value
+    return ""
 
 
 def provider_status(settings: ProviderSettings, env: Mapping[str, str] | None = None) -> dict:
     key_present = bool(_api_key(env))
+    source = os.environ if env is None else env
+    groq_present = bool(str(source.get("GROQ_API_KEY", "") or "").strip())
+    if settings.provider_mode == "mock" and groq_present:
+        # A Groq key with no explicit choice means the coach is really Groq.
+        settings = ProviderSettings(
+            provider_mode="openai_compatible",
+            base_url=settings.base_url or GROQ_BASE_URL,
+            model=settings.model or GROQ_MODEL,
+            timeout_s=settings.timeout_s,
+        )
     if settings.provider_mode == "mock":
         return {
             "mode": "mock",
@@ -96,8 +117,26 @@ def build_provider(
     env: Mapping[str, str] | None = None,
     transport: HttpTransport | None = None,
 ) -> CoachProvider:
+    # With a Groq key present and no explicit provider chosen, use Groq rather
+    # than the offline rule engine: the coach becomes a real model.
+    source = os.environ if env is None else env
+    groq_present = bool(str(source.get("GROQ_API_KEY", "") or "").strip())
     if settings.provider_mode == "mock":
-        return MockCoachProvider()
+        if not groq_present:
+            return MockCoachProvider()
+        settings = ProviderSettings(
+            provider_mode="openai_compatible",
+            base_url=settings.base_url or GROQ_BASE_URL,
+            model=settings.model or GROQ_MODEL,
+            timeout_s=settings.timeout_s,
+        )
+    elif not settings.base_url and groq_present:
+        settings = ProviderSettings(
+            provider_mode=settings.provider_mode,
+            base_url=GROQ_BASE_URL,
+            model=settings.model or GROQ_MODEL,
+            timeout_s=settings.timeout_s,
+        )
     status = provider_status(settings, env)
     if not status["configured"]:
         raise ProviderNotConfiguredError(

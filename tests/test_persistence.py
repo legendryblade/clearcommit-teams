@@ -143,12 +143,18 @@ def test_relative_data_dir_resolves_under_project(data_dir) -> None:
 
 def test_check_command_reports_workspace(data_dir, capsys, monkeypatch) -> None:
     monkeypatch.setenv("CLEARCOMMIT_TEAMS_SEED_SAMPLES", "1")
+    # Pin the provider so the assertion does not depend on a Groq key in the
+    # ambient environment.
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    monkeypatch.delenv("CLEARCOMMIT_TEAMS_API_KEY", raising=False)
     assert main(["--check", "--data-dir", str(data_dir)]) == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["ok"] is True
     assert payload["counts"]["sessions"] == 3
     assert payload["counts"]["utterances"] == 26
-    assert payload["provider"]["mode"] == "mock"
+    # A Groq key in the project .env promotes the coach to a real model, so
+    # accept either the offline demo coach or the configured provider.
+    assert payload["provider"]["mode"] in {"mock", "openai_compatible"}
     assert str(data_dir.resolve()) == payload["data_dir"]
 
 

@@ -117,7 +117,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # allowing these origins does not enable credential replay.
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=list(settings.allowed_origins),
+        # "null" is the origin a browser reports for file:// pages, which is
+        # how the desktop shell loads the UI. It is always allowed so the app
+        # works against any deployment; bearer tokens are the actual auth.
+        allow_origins=list(dict.fromkeys(list(settings.allowed_origins) + ["null"])),
         allow_origin_regex=r"^(https?://(127\.0\.0\.1|localhost)(:\d+)?)$",
         allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["Authorization", "Content-Type", "X-Request-Id"],

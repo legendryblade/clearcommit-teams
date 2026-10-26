@@ -70,6 +70,11 @@ def _parse_origins(raw: str | None) -> tuple[str, ...]:
     origins = tuple(part.strip().rstrip("/") for part in value.split(",") if part.strip())
     if not origins:
         return DEFAULT_DEV_ORIGINS
+    # The desktop shell loads the UI from file://, which browsers report as the
+    # opaque origin "null". Without it here a packaged app cannot authenticate
+    # against a deployed API even though the same page works in a browser.
+    if "null" not in origins:
+        origins = origins + ("null",)
     return origins
 
 

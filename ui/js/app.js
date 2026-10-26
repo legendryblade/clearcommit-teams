@@ -1822,6 +1822,46 @@
     }
   }
 
+  async function loadExampleConversation() {
+    if (state.busy) return;
+    setBusy(true);
+    try {
+      const created = await bridge.call("create_session", {
+        title: "Example call (sample) — renewal pricing",
+        customer_name: "Example customer",
+        company: "Example company",
+        rep_name: "You",
+        customer_language: "en",
+        rep_language: "en",
+        occurred_on: new Date().toISOString().slice(0, 10),
+      });
+      const sessionId = created.session.id;
+      await bridge.call("import_transcript", {
+        session_id: sessionId,
+        transcript: [
+          "[00:04] Customer: Thanks for making time. We want to renew, but the annual price is a concern.",
+          "[00:19] Rep: I understand. It is a bigger number than last year.",
+          "[00:31] Customer: Right. And I am not clear on what the new tier actually includes.",
+          "[00:48] Rep: The main difference is the reporting add-on and priority support.",
+          "[01:02] Customer: Can you send that in writing before we decide?",
+          "[01:15] Rep: Yes, I will send a summary today.",
+        ].join("\n"),
+      });
+      const data = await bridge.call("bootstrap");
+      state.sessions = data.sessions || [];
+      renderSessionList();
+      await selectSession(sessionId);
+      showGlobalAlert(
+        "Loaded an example call. It is sample text, labelled as such — replace it with your own transcript.",
+        "info"
+      );
+    } catch (error) {
+      notifyError(error, "Could not load the example");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function boot() {
     ui.bootRetry.hidden = true;
     ui.bootMessage.textContent = "Opening your local workspace…";
@@ -1888,6 +1928,9 @@
         break;
       case "open-import":
         openImport();
+        break;
+      case "load-example":
+        void loadExampleConversation();
         break;
       case "open-add-line":
         openAddLine();

@@ -3312,3 +3312,18 @@ body[data-busy="true"] .status-light {
 }
 
 .team-overview-list { margin-top: 4px; }
+
+/* Empty-state actions */
+.empty-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin: 4px 0 6px;
+}
+
+.empty-hint {
+  color: var(--ink-faint);
+  font-size: 12px;
+  margin: 0;
+}

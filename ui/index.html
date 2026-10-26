@@ -169,12 +169,16 @@
                 </div>
               </div>
               <ol class="transcript-list" id="transcript-list" aria-live="polite"></ol>
-              <div class="panel-empty" id="transcript-empty" hidden>
-                <p class="empty-mark" aria-hidden="true">“ ”</p>
-                <h3>No finished lines yet</h3>
-                <p>Import a finalized transcript or add one line at a time. This build does not listen to a microphone.</p>
-                <button class="button button-primary" type="button" data-action="open-import">Import a transcript</button>
-              </div>
+        <div class="panel-empty" id="transcript-empty" hidden>
+          <p class="empty-mark" aria-hidden="true">" "</p>
+          <h3>No finished lines yet</h3>
+          <p>Import a finalized transcript or add one line at a time. This build does not listen to a microphone.</p>
+          <div class="empty-actions">
+            <button class="button button-primary" type="button" data-action="open-import">Import a transcript</button>
+            <button class="button button-quiet" type="button" data-action="load-example">Load an example call</button>
+          </div>
+          <p class="empty-hint" id="empty-hint">The example is clearly labelled sample text, not customer data.</p>
+        </div>
             </section>
 
             <aside class="desk-side" aria-label="Analysis controls">

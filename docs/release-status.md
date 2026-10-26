@@ -1,4 +1,4 @@
-# Release status
+﻿# Release status
 
 Current as of commit `e88c47e` plus the packaging verification.
 
@@ -53,7 +53,7 @@ audio → transcript        'Hello team this is a live capture test of clear com
 | Missing | Detail |
 | --- | --- |
 | Translation | No machine translation. Text is stored as supplied. |
-| Speaker diarization | The capture gate emits utterances; it does not separate speakers. |
+| Speaker separation | In a 1:1 call the microphone is you and the system audio is the caller, so speakers are labelled by source. Three or more voices on one channel are not separated. |
 | Email delivery | Invitations are created in-app; nothing is emailed. |
 | CRM integration | None. |
 | Manager analytics | Counts from authorized records only; no scoring or trends. |

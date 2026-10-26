@@ -8,14 +8,26 @@
 (function () {
   "use strict";
 
-  const DEFAULT_SERVER = "http://127.0.0.1:8770";
   const TOKEN_KEY = "clearcommit.teams.token";
   const SERVER_KEY = "clearcommit.teams.server";
   const SUPABASE_KEY = "clearcommit.teams.supabase";
 
+  // The API base URL is configuration, not a constant. Resolution order:
+  //   1. an explicit choice saved by the user (the server field in the UI)
+  //   2. a value injected by the host page (window.CLEARCOMMIT_API_BASE)
+  //   3. the local development default
+  // A deployed build sets (2) so no private address is baked into the app.
+  const DEV_DEFAULT = "http://127.0.0.1:8770";
+
+  function configuredDefault() {
+    const injected = typeof window !== "undefined" ? window.CLEARCOMMIT_API_BASE : null;
+    if (injected && String(injected).trim()) return String(injected).trim().replace(/\/+$/, "");
+    return DEV_DEFAULT;
+  }
+
   function serverUrl() {
     const stored = localStorage.getItem(SERVER_KEY);
-    return (stored && stored.trim() ? stored.trim() : DEFAULT_SERVER).replace(/\/+$/, "");
+    return (stored && stored.trim() ? stored.trim() : configuredDefault()).replace(/\/+$/, "");
   }
 
   function setServer(url) {
@@ -349,6 +361,6 @@
     token: token,
     setToken: setToken,
     signedIn: signedIn,
-    DEFAULT_SERVER: DEFAULT_SERVER,
+    DEFAULT_SERVER: configuredDefault(),
   };
 })();

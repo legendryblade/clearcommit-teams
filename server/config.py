@@ -39,10 +39,38 @@ class Settings:
     request_timeout_seconds: float
     rate_limit_per_minute: int
     jwt_leeway_seconds: int
+    allowed_origins: tuple[str, ...]
 
     @property
     def is_supabase(self) -> bool:
         return self.mode == "supabase"
+
+
+DEFAULT_DEV_ORIGINS = (
+    "null",  # file:// pages used by the desktop shell
+    "http://127.0.0.1:8765",
+    "http://localhost:8765",
+)
+
+
+def _parse_origins(raw: str | None) -> tuple[str, ...]:
+    """CORS origins from the environment.
+
+    Unset means "local development only". A deployed API must set
+    CLEARCOMMIT_ALLOWED_ORIGINS explicitly; there is no permissive default.
+    """
+    value = _clean(raw)
+    if not value:
+        return DEFAULT_DEV_ORIGINS
+    if value.strip() == "*":
+        raise ConfigError(
+            "CLEARCOMMIT_ALLOWED_ORIGINS may not be '*'. List the exact origins "
+            "allowed to call this API."
+        )
+    origins = tuple(part.strip().rstrip("/") for part in value.split(",") if part.strip())
+    if not origins:
+        return DEFAULT_DEV_ORIGINS
+    return origins
 
 
 def load_settings(env: dict[str, str] | None = None) -> Settings:
@@ -95,4 +123,5 @@ def load_settings(env: dict[str, str] | None = None) -> Settings:
         request_timeout_seconds=request_timeout,
         rate_limit_per_minute=rate_limit,
         jwt_leeway_seconds=int(_clean(env.get("CLEARCOMMIT_JWT_LEEWAY_SECONDS")) or 60),
+        allowed_origins=_parse_origins(env.get("CLEARCOMMIT_ALLOWED_ORIGINS")),
     )

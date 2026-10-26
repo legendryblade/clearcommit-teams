@@ -1,4 +1,4 @@
-"""FastAPI application factory for the ClearCommit Teams backend."""
+﻿"""FastAPI application factory for the ClearCommit Teams backend."""
 
 from __future__ import annotations
 
@@ -117,7 +117,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # allowing these origins does not enable credential replay.
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["null", "http://127.0.0.1:8765", "http://localhost:8765"],
+        allow_origins=list(settings.allowed_origins),
         allow_origin_regex=r"^(https?://(127\.0\.0\.1|localhost)(:\d+)?)$",
         allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["Authorization", "Content-Type", "X-Request-Id"],

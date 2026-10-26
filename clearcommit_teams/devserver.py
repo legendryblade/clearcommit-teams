@@ -1,4 +1,4 @@
-"""Local development / UI-smoke HTTP server.
+﻿"""Local development / UI-smoke HTTP server.
 
 This is not the desktop shell. It serves the same HTML and calls the same
 Python Bridge so browser-based tests exercise the real backend. It binds to
@@ -97,7 +97,25 @@ def make_server(port: int, bridge, directory: Path = UI_DIR) -> ThreadingHTTPSer
     return server
 
 
+def _load_local_env() -> None:
+    """Load .env from the project root so provider keys are available.
+
+    Missing python-dotenv or a missing file is not an error: the app runs
+    without live transcription rather than failing to start.
+    """
+    try:
+        from dotenv import load_dotenv
+    except ImportError:
+        return
+    from pathlib import Path
+
+    env_path = Path(__file__).resolve().parent.parent / ".env"
+    if env_path.exists():
+        load_dotenv(env_path, override=False)
+
+
 def main(argv: list[str] | None = None) -> int:
+    _load_local_env()
     parser = argparse.ArgumentParser(description="ClearCommit Teams local UI server")
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--data-dir", default=None)

@@ -3327,3 +3327,49 @@ body[data-busy="true"] .status-light {
   font-size: 12px;
   margin: 0;
 }
+
+/* Live capture panel */
+.capture-panel {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 12px;
+  padding: 18px 20px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--signal);
+  border-radius: var(--radius);
+  background: var(--card-strong);
+  box-shadow: var(--shadow-card);
+}
+
+.capture-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.capture-head h2 { font-family: var(--font-display); font-size: 19px; color: var(--ink); }
+
+.capture-state {
+  padding: 2px 10px; border-radius: 999px; border: 1px solid var(--line-strong);
+  font-size: 10.5px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink-faint);
+}
+.capture-state.is-live { border-color: var(--signal); background: var(--signal-soft); color: var(--signal-deep); }
+.capture-state.is-done { border-color: var(--teal); background: var(--teal-soft); color: var(--teal); }
+
+.capture-controls { display: flex; gap: 10px; flex-wrap: wrap; align-items: end; }
+.capture-field { display: grid; gap: 4px; min-width: 180px; }
+.capture-label { font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-faint); }
+.capture-input {
+  padding: 8px 10px; border: 1px solid var(--line-strong); border-radius: var(--radius-small);
+  background: var(--card); color: var(--ink); font: inherit; font-size: 13.5px; max-width: 280px;
+}
+.capture-note { color: var(--ink-faint); font-size: 12.5px; line-height: 1.5; margin: 0; max-width: 70ch; }
+
+.capture-live { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--signal-deep); }
+.capture-dot {
+  width: 9px; height: 9px; border-radius: 50%; background: var(--signal);
+  animation: capture-pulse 1.4s ease-in-out infinite;
+}
+@keyframes capture-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.25; } }
+@media (prefers-reduced-motion: reduce) { .capture-dot { animation: none; } }
+
+.capture-segments { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.capture-segment {
+  padding: 8px 11px; border: 1px solid var(--line); border-radius: var(--radius-small);
+  background: var(--card); font-size: 13.5px; color: var(--ink); line-height: 1.45;
+}

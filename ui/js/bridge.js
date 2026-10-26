@@ -42,6 +42,11 @@
     "get_cloud_link",
     "set_cloud_link",
     "transcript_payload",
+    "audio_status",
+    "audio_devices",
+    "audio_start",
+    "audio_poll",
+    "audio_stop",
   ]);
 
   const METHOD_SET = new Set(METHODS);

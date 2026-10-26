@@ -1,1 +1,7 @@
-pywebview==6.2.1
+﻿pywebview==6.2.1
+# Live capture + transcription (optional; the app runs without these)
+sounddevice==0.5.5
+PyAudioWPatch==0.2.12.8
+numpy
+groq
+python-dotenv

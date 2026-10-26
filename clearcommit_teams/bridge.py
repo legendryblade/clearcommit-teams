@@ -59,6 +59,11 @@ PUBLIC_METHODS = (
     "test_provider",
     "refresh_preview",
     "use_workspace",
+    "audio_status",
+    "audio_devices",
+    "audio_start",
+    "audio_poll",
+    "audio_stop",
     "get_cloud_link",
     "set_cloud_link",
     "transcript_payload",
@@ -93,6 +98,8 @@ class Bridge:
         self.data_dir = data_dir
         self.base_data_dir = base_data_dir or data_dir
         self.db = repo.db
+        self._capture = None
+        self._capture_source = None
 
     # ------------------------------------------------------------------ #
     # Envelope handling
@@ -382,6 +389,105 @@ class Bridge:
                 if (row.get("original_text") or row.get("text"))
             ],
         }
+
+    # ---- Audio capture (opt-in; nothing starts automatically) ---- #
+    def audio_status(self, payload: Any = None) -> dict:
+        return self._execute("audio_status", self._audio_status, payload)
+
+    def _audio_status(self, _payload: Mapping[str, Any]) -> dict:
+        from .audio import availability, default_loopback_available
+        from .audio.transcribe import provider_status
+
+        state = availability()
+        return {
+            "capture": {
+                "available": state.available,
+                "missing": list(state.missing),
+                "detail": state.detail,
+                "system_audio": default_loopback_available(),
+            },
+            "transcription": provider_status(),
+            "active": bool(self._capture is not None and self._capture.active),
+            "source": self._capture_source,
+        }
+
+    def audio_devices(self, payload: Any = None) -> dict:
+        return self._execute("audio_devices", self._audio_devices, payload)
+
+    def _audio_devices(self, _payload: Mapping[str, Any]) -> dict:
+        from .audio import availability, list_microphones, list_output_devices
+
+        state = availability()
+        if not state.available:
+            return {"available": False, "detail": state.detail, "microphones": [], "outputs": []}
+        return {
+            "available": True,
+            "detail": state.detail,
+            "microphones": [
+                {"index": idx, "name": name} for idx, name in list_microphones()
+            ],
+            "outputs": [
+                {"index": idx, "name": name, "channels": mo}
+                for idx, name, _inputs, mo in list_output_devices()
+                if mo > 0
+            ],
+        }
+
+    def audio_start(self, payload: Any = None) -> dict:
+        return self._execute("audio_start", self._audio_start, payload)
+
+    def _audio_start(self, payload: Mapping[str, Any]) -> dict:
+        from .audio import CaptureSession
+
+        if self._capture is not None and self._capture.active:
+            raise ValidationError("A recording is already in progress.")
+        source = str(payload.get("source") or "microphone").strip().lower()
+        if source not in ("microphone", "system"):
+            raise ValidationError("source must be microphone or system.")
+        device = payload.get("device")
+        if device is not None:
+            try:
+                device = int(device)
+            except (TypeError, ValueError) as exc:
+                raise ValidationError("The device must be a device index.") from exc
+        session = CaptureSession(source, device)
+        session.start()
+        self._capture = session
+        self._capture_source = source
+        return {"active": True, "source": source}
+
+    def audio_poll(self, payload: Any = None) -> dict:
+        return self._execute("audio_poll", self._audio_poll, payload)
+
+    def _audio_poll(self, _payload: Mapping[str, Any]) -> dict:
+        """Transcribe whatever accumulated since the last poll."""
+        if self._capture is None:
+            return {"active": False, "segments": 0, "text": ""}
+        from .audio.transcribe import get_transcriber
+
+        chunks = self._capture.drain()
+        if not chunks:
+            return {"active": self._capture.active, "segments": 0, "text": ""}
+        transcriber = get_transcriber()
+        parts = []
+        for wav in chunks:
+            parts.append(transcriber.transcribe(wav).text)
+        return {
+            "active": self._capture.active,
+            "segments": len(parts),
+            "text": " ".join(parts).strip(),
+        }
+
+    def audio_stop(self, payload: Any = None) -> dict:
+        return self._execute("audio_stop", self._audio_stop, payload)
+
+    def _audio_stop(self, _payload: Mapping[str, Any]) -> dict:
+        if self._capture is None:
+            return {"active": False}
+        self._capture.stop()
+        self._capture = None
+        self._capture_source = None
+        return {"active": False}
 
     def use_workspace(self, payload: Any = None) -> dict:
         return self._execute("use_workspace", self._use_workspace, payload)

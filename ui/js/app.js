@@ -86,6 +86,15 @@
     addLineButton: "add-line-button",
     syncButton: "sync-button",
     syncButtonLabel: "sync-button-label",
+    capturePanel: "capture-panel",
+    captureState: "capture-state",
+    captureSource: "capture-source",
+    captureDevice: "capture-device",
+    captureToggle: "capture-toggle",
+    captureNote: "capture-note",
+    captureLive: "capture-live",
+    captureLiveText: "capture-live-text",
+    captureSegments: "capture-segments",
     transcriptList: "transcript-list",
     transcriptEmpty: "transcript-empty",
     selectionCount: "selection-count",
@@ -1881,6 +1890,157 @@
     return created.conversation_id;
   }
 
+  // ---- Live capture -------------------------------------------------------
+  // Nothing records until the user presses Start. Polling pulls completed
+  // utterances from the bridge, transcribes them, and appends the text to the
+  // open conversation. Raw audio never leaves the machine.
+  const capture = { timer: null, active: false, buffer: [] };
+
+  async function initCapture() {
+    if (!ui.capturePanel) return;
+    try {
+      const status = await bridge.call("audio_status");
+      if (!status.capture.available) {
+        ui.capturePanel.hidden = true;
+        return;
+      }
+      ui.capturePanel.hidden = false;
+      if (!status.transcription.configured) {
+        ui.captureNote.textContent =
+          "Capturing works, but transcription needs GROQ_API_KEY set on this computer.";
+      }
+      await refreshCaptureDevices();
+    } catch (error) {
+      ui.capturePanel.hidden = true;
+    }
+  }
+
+  async function refreshCaptureDevices() {
+    const source = ui.captureSource.value;
+    try {
+      const devices = await bridge.call("audio_devices");
+      clear(ui.captureDevice);
+      const list = source === "system" ? devices.outputs : devices.microphones;
+      if (!list.length) {
+        const opt = el("option", null, source === "system" ? "No system audio device" : "No microphone");
+        ui.captureDevice.append(opt);
+        return;
+      }
+      list.forEach(function (device) {
+        const opt = el("option", null, device.name);
+        opt.value = String(device.index);
+        ui.captureDevice.append(opt);
+      });
+    } catch (error) {
+      showAlert(ui.captureNote, describeError(error));
+    }
+  }
+
+  async function toggleCapture() {
+    if (capture.active) {
+      await stopCapture();
+    } else {
+      await startCapture();
+    }
+  }
+
+  async function startCapture() {
+    if (!state.session) {
+      showGlobalAlert("Create or open a conversation before recording.", "info");
+      return;
+    }
+    ui.captureToggle.disabled = true;
+    try {
+      const deviceValue = ui.captureDevice.value;
+      await bridge.call("audio_start", {
+        source: ui.captureSource.value,
+        device: deviceValue === "" ? null : Number(deviceValue),
+      });
+      capture.active = true;
+      capture.buffer = [];
+      clear(ui.captureSegments);
+      ui.captureState.textContent = "Recording";
+      ui.captureState.className = "capture-state is-live";
+      ui.captureLive.hidden = false;
+      ui.captureLiveText.textContent = "Recording — speak normally. Audio stays on this computer.";
+      ui.captureToggle.textContent = "Stop recording";
+      ui.captureToggle.classList.remove("button-primary");
+      capture.timer = window.setInterval(pollCapture, 4000);
+    } catch (error) {
+      notifyError(error, "Could not start recording");
+      ui.captureState.textContent = "Idle";
+      ui.captureState.className = "capture-state";
+    } finally {
+      ui.captureToggle.disabled = false;
+    }
+  }
+
+  async function pollCapture() {
+    if (!capture.active) return;
+    try {
+      const result = await bridge.call("audio_poll");
+      if (result.text) {
+        capture.buffer.push(result.text);
+        const item = el("li", "capture-segment", result.text);
+        ui.captureSegments.append(item);
+        ui.captureLiveText.textContent = "Recording — " + capture.buffer.length + " segment(s) so far.";
+      }
+    } catch (error) {
+      // A provider failure must be visible, and must not silently lose audio.
+      ui.captureLiveText.textContent =
+        "Transcription problem: " + describeError(error) + " Audio is still being captured.";
+    }
+  }
+
+  async function stopCapture() {
+    if (capture.timer) {
+      window.clearInterval(capture.timer);
+      capture.timer = null;
+    }
+    ui.captureToggle.disabled = true;
+    try {
+      await pollCapture();
+      await bridge.call("audio_stop");
+      capture.active = false;
+      ui.captureLive.hidden = true;
+      ui.captureToggle.textContent = "Start recording";
+      ui.captureToggle.classList.add("button-primary");
+      if (capture.buffer.length) {
+        await appendCapturedText(capture.buffer.join(" "));
+        ui.captureState.textContent = "Added to transcript";
+        ui.captureState.className = "capture-state is-done";
+        showGlobalAlert("Recording added to the conversation transcript.", "ok");
+      } else {
+        ui.captureState.textContent = "Nothing captured";
+        ui.captureState.className = "capture-state";
+        showGlobalAlert(
+          "No speech was detected. Check the microphone is not muted and try again.",
+          "warn"
+        );
+      }
+    } catch (error) {
+      notifyError(error, "Could not stop recording cleanly");
+    } finally {
+      ui.captureToggle.disabled = false;
+    }
+  }
+
+  async function appendCapturedText(text) {
+    if (!state.session || !text.trim()) return;
+    const speaker = ui.lineSpeaker && ui.lineSpeaker.value ? ui.lineSpeaker.value : "customer";
+    try {
+      await bridge.call("add_utterance", {
+        session_id: state.session.id,
+        speaker: speaker,
+        original_text: text.trim(),
+        language: state.session.customer_language || "en",
+      });
+      await selectSession(state.session.id);
+    } catch (error) {
+      notifyError(error, "Captured text could not be saved to the conversation");
+    }
+  }
+
   async function saveToCloud() {
     if (state.busy) return;
     if (!state.session) {
@@ -2071,6 +2231,9 @@
       case "open-import":
         openImport();
         break;
+      case "capture-toggle":
+        void toggleCapture();
+        break;
       case "save-to-cloud":
         void saveToCloud();
         break;
@@ -2187,6 +2350,12 @@
     renderSelection();
     renderAssistantNotes();
     initOnboarding();
+    void initCapture();
+    if (ui.captureSource) {
+      ui.captureSource.addEventListener("change", function () {
+        void refreshCaptureDevices();
+      });
+    }
     void boot();
   }
 

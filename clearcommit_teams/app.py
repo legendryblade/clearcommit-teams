@@ -1,4 +1,4 @@
-"""Desktop entry point for ClearCommit Teams."""
+﻿"""Desktop entry point for ClearCommit Teams."""
 
 from __future__ import annotations
 
@@ -65,7 +65,19 @@ def _launch_webview(context, debug: bool) -> int:
     return 0
 
 
+def _load_local_env() -> None:
+    """Load .env from the project root so provider keys reach the desktop app."""
+    try:
+        from dotenv import load_dotenv
+    except ImportError:
+        return
+    env_path = Path(__file__).resolve().parent.parent / ".env"
+    if env_path.exists():
+        load_dotenv(env_path, override=False)
+
+
 def main(argv: list[str] | None = None) -> int:
+    _load_local_env()
     args = _parser().parse_args(argv)
     try:
         context = build_context(args.data_dir)

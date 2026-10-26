@@ -3373,3 +3373,16 @@ body[data-busy="true"] .status-light {
   padding: 8px 11px; border: 1px solid var(--line); border-radius: var(--radius-small);
   background: var(--card); font-size: 13.5px; color: var(--ink); line-height: 1.45;
 }
+
+.capture-speaker {
+  display: inline-block;
+  margin-right: 8px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--paper-deep);
+  color: var(--ink-soft);
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}

@@ -101,3 +101,105 @@ def test_capture_session_does_not_start_implicitly() -> None:
     session = CaptureSession("microphone")
     assert session.active is False
     assert session.drain() == []
+
+class RecordingTranscriber:
+    """Deterministic transcriber that returns whatever it was told to."""
+
+    name = "recording"
+
+    def __init__(self, texts):
+        self.texts = list(texts)
+        self.languages = []
+
+    def transcribe(self, wav_bytes, language=None):
+        from clearcommit_teams.audio.transcribe import TranscriptSegment
+
+        self.languages.append(language)
+        text = self.texts.pop(0) if self.texts else ""
+        return TranscriptSegment(text=text)
+
+
+def _patch_poll_dependencies(monkeypatch, transcriber):
+    """Make audio_poll think a session is live with queued chunks."""
+    import clearcommit_teams.audio as audio_pkg
+    import clearcommit_teams.audio.transcribe as transcribe_mod
+
+    class FakeSession:
+        active = True
+
+        def __init__(self, pairs):
+            self._pairs = pairs
+
+        def drain_both(self):
+            pairs, self._pairs = self._pairs, []
+            return pairs
+
+    monkeypatch.setattr(transcribe_mod, "get_transcriber", lambda provider="groq": transcriber)
+    return FakeSession
+
+
+def test_both_sources_label_you_and_caller(monkeypatch) -> None:
+    """Microphone audio is the user; system audio is the other participant."""
+    from clearcommit_teams.bridge import Bridge
+    from clearcommit_teams.audio.transcribe import TranscriptSegment
+
+    class TurnTranscriber:
+        name = "turns"
+
+        def __init__(self):
+            self.calls = 0
+
+        def transcribe(self, wav_bytes, language=None):
+            self.calls += 1
+            if wav_bytes == b"mic":
+                return TranscriptSegment(text="Thanks for joining", speaker=None)
+            return TranscriptSegment(text="Happy to be here", speaker=None)
+
+    import clearcommit_teams.audio.transcribe as transcribe_mod
+
+    monkeypatch.setattr(
+        transcribe_mod, "get_transcriber", lambda provider="groq": TurnTranscriber()
+    )
+
+    bridge = object.__new__(Bridge)
+    bridge._capture = type(
+        "S", (), {"active": True, "drain_both": lambda self: [("microphone", b"mic"), ("system", b"sys")]}
+    )()
+    result = bridge._audio_poll({"provider": "groq"})
+
+    assert result["segments"] == 2
+    assert result["turns"][0]["speaker"] == "rep"
+    assert result["turns"][0]["source"] == "microphone"
+    assert result["turns"][1]["speaker"] == "customer"
+    assert result["turns"][1]["source"] == "system"
+    assert "Thanks for joining" in result["text"]
+    assert "Happy to be here" in result["text"]
+
+
+def test_no_chunks_returns_empty_without_calling_a_provider(monkeypatch) -> None:
+    from clearcommit_teams.bridge import Bridge
+
+    called = {"n": 0}
+
+    def boom(provider="groq"):
+        called["n"] += 1
+        raise AssertionError("a provider must not be called with no audio")
+
+    import clearcommit_teams.audio.transcribe as transcribe_mod
+
+    monkeypatch.setattr(transcribe_mod, "get_transcriber", boom)
+    bridge = object.__new__(Bridge)
+    bridge._capture = type("S", (), {"active": True, "drain_both": lambda self: []})()
+
+    result = bridge._audio_poll({"provider": "groq"})
+    assert result["segments"] == 0
+    assert called["n"] == 0
+
+
+def test_inactive_session_reports_not_active() -> None:
+    from clearcommit_teams.bridge import Bridge
+
+    bridge = object.__new__(Bridge)
+    bridge._capture = None
+    result = bridge._audio_poll({"provider": "groq"})
+    assert result["active"] is False

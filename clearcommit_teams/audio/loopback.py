@@ -95,10 +95,13 @@ class LoopbackCapture:
             raise RuntimeError(
                 "WASAPI is not available (required for loopback capture)."
             ) from exc
-        default_out = p.get_device_info_by_index(wasapi["defaultOutputDevice"])
-        target_name = default_out["name"]
+        chosen = None
         if self.output_device is not None:
-            target_name = p.get_device_info_by_index(self.output_device)["name"]
+            chosen = p.get_device_info_by_index(self.output_device)
+            # A loopback endpoint may be selected directly.
+            if chosen.get("isLoopbackDevice"):
+                return chosen, p
+        target_name = (chosen or p.get_device_info_by_index(wasapi["defaultOutputDevice"]))["name"]
         for i in range(p.get_device_count()):
             d = p.get_device_info_by_index(i)
             if d.get("isLoopbackDevice") and str(d["name"]).startswith(target_name):

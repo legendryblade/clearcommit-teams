@@ -90,6 +90,8 @@
     captureState: "capture-state",
     captureSource: "capture-source",
     captureDevice: "capture-device",
+    captureSystemDevice: "capture-system-device",
+    captureProvider: "capture-provider",
     captureToggle: "capture-toggle",
     captureNote: "capture-note",
     captureLive: "capture-live",
@@ -1916,26 +1918,32 @@
   }
 
   async function refreshCaptureDevices() {
-    const source = ui.captureSource.value;
     try {
       const devices = await bridge.call("audio_devices");
-      clear(ui.captureDevice);
-      const list = source === "system" ? devices.outputs : devices.microphones;
-      if (!list.length) {
-        const opt = el("option", null, source === "system" ? "No system audio device" : "No microphone");
-        ui.captureDevice.append(opt);
-        return;
-      }
-      list.forEach(function (device) {
-        const opt = el("option", null, device.name);
-        opt.value = String(device.index);
-        ui.captureDevice.append(opt);
-      });
+      fillDeviceList(ui.captureDevice, devices.microphones, "No microphone found");
+      fillDeviceList(ui.captureSystemDevice, devices.outputs, "No call audio device found");
     } catch (error) {
       showAlert(ui.captureNote, describeError(error));
     }
   }
 
+  function fillDeviceList(select, devices, emptyLabel) {
+    if (!select) return;
+    const previous = select.value;
+    clear(select);
+    if (!devices || !devices.length) {
+      select.append(el("option", null, emptyLabel));
+      return;
+    }
+    devices.forEach(function (device) {
+      const opt = el("option", null, device.name);
+      opt.value = String(device.index);
+      select.append(opt);
+    });
+    if (previous && devices.some(function (d) { return String(d.index) === previous; })) {
+      select.value = previous;
+    }
+  }
   async function toggleCapture() {
     if (capture.active) {
       await stopCapture();
@@ -1951,21 +1959,30 @@
     }
     ui.captureToggle.disabled = true;
     try {
-      const deviceValue = ui.captureDevice.value;
-      await bridge.call("audio_start", {
-        source: ui.captureSource.value,
-        device: deviceValue === "" ? null : Number(deviceValue),
-      });
+      const mode = ui.captureSource.value;
+      const payload = {
+        source: mode === "system" ? "system" : "microphone",
+        include_system: mode === "both",
+        device: ui.captureDevice.value === "" ? null : Number(ui.captureDevice.value),
+        system_device:
+          ui.captureSystemDevice && ui.captureSystemDevice.value !== ""
+            ? Number(ui.captureSystemDevice.value)
+            : null,
+      };
+      await bridge.call("audio_start", payload);
       capture.active = true;
       capture.buffer = [];
       clear(ui.captureSegments);
       ui.captureState.textContent = "Recording";
       ui.captureState.className = "capture-state is-live";
       ui.captureLive.hidden = false;
-      ui.captureLiveText.textContent = "Recording — speak normally. Audio stays on this computer.";
+      ui.captureLiveText.textContent =
+        mode === "both"
+          ? "Recording both sides — your microphone and the call audio. Audio stays on this computer."
+          : "Recording — speak normally. Audio stays on this computer.";
       ui.captureToggle.textContent = "Stop recording";
       ui.captureToggle.classList.remove("button-primary");
-      capture.timer = window.setInterval(pollCapture, 4000);
+      capture.timer = window.setInterval(pollCapture, 5000);
     } catch (error) {
       notifyError(error, "Could not start recording");
       ui.captureState.textContent = "Idle";
@@ -1974,16 +1991,28 @@
       ui.captureToggle.disabled = false;
     }
   }
-
   async function pollCapture() {
     if (!capture.active) return;
     try {
-      const result = await bridge.call("audio_poll");
-      if (result.text) {
-        capture.buffer.push(result.text);
-        const item = el("li", "capture-segment", result.text);
-        ui.captureSegments.append(item);
-        ui.captureLiveText.textContent = "Recording — " + capture.buffer.length + " segment(s) so far.";
+      const provider = ui.captureProvider ? ui.captureProvider.value : "groq";
+      const result = await bridge.call("audio_poll", { provider: provider });
+      const turns = result.turns || [];
+      if (turns.length) {
+        turns.forEach(function (turn) {
+          capture.buffer.push(turn);
+          const item = el("li", "capture-segment");
+          const who = turn.speaker === "rep" ? "You" : turn.speaker === "customer" ? "Caller" : null;
+          if (who) item.append(el("span", "capture-speaker", who));
+          item.append(document.createTextNode(turn.text));
+          ui.captureSegments.append(item);
+        });
+        ui.captureLiveText.textContent =
+          "Recording — " + capture.buffer.length + " segment(s) so far.";
+      } else if (result.text) {
+        capture.buffer.push({ speaker: null, text: result.text });
+        ui.captureSegments.append(el("li", "capture-segment", result.text));
+        ui.captureLiveText.textContent =
+          "Recording — " + capture.buffer.length + " segment(s) so far.";
       }
     } catch (error) {
       // A provider failure must be visible, and must not silently lose audio.
@@ -2006,7 +2035,7 @@
       ui.captureToggle.textContent = "Start recording";
       ui.captureToggle.classList.add("button-primary");
       if (capture.buffer.length) {
-        await appendCapturedText(capture.buffer.join(" "));
+        await appendCapturedText(capture.buffer);
         ui.captureState.textContent = "Added to transcript";
         ui.captureState.className = "capture-state is-done";
         showGlobalAlert("Recording added to the conversation transcript.", "ok");
@@ -2025,16 +2054,34 @@
     }
   }
 
-  async function appendCapturedText(text) {
-    if (!state.session || !text.trim()) return;
-    const speaker = ui.lineSpeaker && ui.lineSpeaker.value ? ui.lineSpeaker.value : "customer";
+  async function appendCapturedText(turns) {
+    if (!state.session || !turns.length) return;
+    const fallbackSpeaker = ui.lineSpeaker && ui.lineSpeaker.value ? ui.lineSpeaker.value : "customer";
     try {
-      await bridge.call("add_utterance", {
-        session_id: state.session.id,
-        speaker: speaker,
-        original_text: text.trim(),
-        language: state.session.customer_language || "en",
-      });
+      for (let index = 0; index < turns.length; index++) {
+        const turn = turns[index];
+        const text = typeof turn === "string" ? turn : turn.text;
+        if (!text || !text.trim()) continue;
+        // With diarization, Deepgram labels turns as SPEAKER_00/01. Map the
+        // first label seen to the customer and the second to the rep, which
+        // matches how a two-party sales call is transcribed in this product.
+        // The capture source is authoritative: microphone is the user,
+        // system audio is the other participant.
+        let speaker = fallbackSpeaker;
+        if (turn.speaker === "rep" || turn.speaker === "customer") {
+          speaker = turn.speaker;
+        } else if (turn.speaker === "SPEAKER_00") {
+          speaker = "customer";
+        } else if (turn.speaker) {
+          speaker = "rep";
+        }
+        await bridge.call("add_utterance", {
+          session_id: state.session.id,
+          speaker: speaker,
+          original_text: text.trim(),
+          language: state.session.customer_language || "en",
+        });
+      }
       await selectSession(state.session.id);
     } catch (error) {
       notifyError(error, "Captured text could not be saved to the conversation");

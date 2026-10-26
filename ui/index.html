@@ -170,15 +170,27 @@
               </div>
               <div class="capture-controls">
                 <label class="capture-field">
-                  <span class="capture-label">Source</span>
+                  <span class="capture-label">Listen to</span>
                   <select class="capture-input" id="capture-source">
-                    <option value="microphone">Microphone</option>
-                    <option value="system">System audio</option>
+                    <option value="both">Both sides (1:1 call)</option>
+                    <option value="microphone">Microphone only</option>
+                    <option value="system">Other side only</option>
                   </select>
                 </label>
                 <label class="capture-field">
-                  <span class="capture-label">Device</span>
+                  <span class="capture-label">Your microphone</span>
                   <select class="capture-input" id="capture-device"></select>
+                </label>
+                <label class="capture-field">
+                  <span class="capture-label">Call audio (speakers)</span>
+                  <select class="capture-input" id="capture-system-device"></select>
+                </label>
+                <label class="capture-field">
+                  <span class="capture-label">Transcription</span>
+                  <select class="capture-input" id="capture-provider">
+                    <option value="groq">Groq — fastest</option>
+                    <option value="deepgram">Deepgram — with speakers</option>
+                  </select>
                 </label>
                 <button class="button button-primary" id="capture-toggle" type="button" data-action="capture-toggle">Start recording</button>
               </div>

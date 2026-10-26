@@ -1,4 +1,4 @@
-"""Optional desktop audio capture.
+﻿"""Optional desktop audio capture.
 
 Nothing here runs unless the user explicitly starts a recording. The device
 libraries are imported lazily so a machine without them still runs the whole
@@ -21,6 +21,43 @@ REQUIRED_MODULES = {
     "pyaudiowpatch": "Windows system-audio capture",
     "numpy": "audio processing",
 }
+
+
+def _is_output_or_loopback(index: int) -> bool:
+    """True when the index can carry system audio (playback or loopback)."""
+    try:
+        import pyaudiowpatch as pyaudio
+
+        audio = pyaudio.PyAudio()
+        try:
+            info = audio.get_device_info_by_index(int(index))
+        finally:
+            audio.terminate()
+        return bool(info.get("maxOutputChannels", 0) > 0 or info.get("isLoopbackDevice"))
+    except Exception:
+        return False
+
+
+def loopback_devices() -> list[tuple[int, str]]:
+    """Every capture endpoint that can record what the machine plays."""
+    state = availability()
+    if not state.available:
+        return []
+    try:
+        import pyaudiowpatch as pyaudio
+
+        audio = pyaudio.PyAudio()
+        try:
+            found = []
+            for i in range(audio.get_device_count()):
+                info = audio.get_device_info_by_index(i)
+                if info.get("isLoopbackDevice"):
+                    found.append((i, str(info["name"]).replace(" [Loopback]", "")))
+            return found
+        finally:
+            audio.terminate()
+    except Exception:
+        return []
 
 
 @dataclass(frozen=True)
@@ -79,35 +116,85 @@ def default_loopback_available() -> bool:
 
 
 class CaptureSession:
-    """One active capture at a time, microphone or system audio."""
+    """One active capture, optionally listening to both sides of a call.
 
-    def __init__(self, source: str, device: Any = None) -> None:
+    In a one-to-one call the microphone is the person using ClearCommit and the
+    system audio is the other participant. Capturing both at once therefore
+    labels the speakers by source, which is more reliable than asking a
+    diarization model to guess between two channels.
+    """
+
+    def __init__(
+        self,
+        source: str,
+        device: Any = None,
+        *,
+        system_device: Any = None,
+        include_system: bool = False,
+    ) -> None:
         self.source = source
         self.device = device
+        self.system_device = system_device
+        self.include_system = include_system
         self._capture = None
+        self._system_capture = None
         self._started = False
 
     def start(self) -> None:
         _require()
         if self._started:
             return
-        if self.source == "system":
-            from .loopback import LoopbackCapture
 
-            self._capture = LoopbackCapture(output_device=self.device)
-        else:
-            from .mic import MicCapture
+        if self.source == "system" or self.include_system:
+            self._system_capture = self._open_system(self.system_device or self.device)
+        if self.source == "microphone" or self.include_system:
+            self._capture = self._open_mic(self.device if self.source == "microphone" else None)
 
-            self._capture = MicCapture(device=self.device)
-        self._capture.start()
+        started = []
+        try:
+            if self._capture is not None:
+                self._capture.start()
+                started.append(self._capture)
+            if self._system_capture is not None:
+                self._system_capture.start()
+                started.append(self._system_capture)
+        except Exception as exc:  # PortAudio raises opaque host errors
+            for capture in started:
+                try:
+                    capture.stop()
+                except Exception:
+                    pass
+            self._capture = None
+            self._system_capture = None
+            raise RuntimeError(
+                "The audio device could not be opened. Choose a different device "
+                "and make sure it is not in use by another application."
+            ) from exc
         self._started = True
 
+    @staticmethod
+    def _open_system(device):
+        from .loopback import LoopbackCapture
+
+        chosen = device
+        if chosen is not None and not _is_output_or_loopback(chosen):
+            chosen = None
+        return LoopbackCapture(output_device=chosen)
+
+    @staticmethod
+    def _open_mic(device):
+        from .mic import MicCapture
+
+        return MicCapture(device=device)
+
     def stop(self) -> None:
-        if self._capture is not None:
-            try:
-                self._capture.stop()
-            finally:
-                self._started = False
+        for capture in (self._capture, self._system_capture):
+            if capture is not None:
+                try:
+                    capture.stop()
+                except Exception:
+                    pass
+        self._started = False
 
     @property
     def active(self) -> bool:
@@ -118,6 +205,21 @@ class CaptureSession:
             return iter(())
         return self._capture.utterances()
 
+    def drain_both(self) -> list[tuple[str, bytes]]:
+        """Return (source, wav) pairs ready now, never blocking."""
+        chunks: list[tuple[str, bytes]] = []
+        for label, capture in (("microphone", self._capture), ("system", self._system_capture)):
+            if capture is None:
+                continue
+            queue_obj = getattr(capture, "_utt_q", None)
+            if queue_obj is None:
+                continue
+            while True:
+                try:
+                    chunks.append((label, queue_obj.get_nowait()))
+                except Exception:
+                    break
+        return chunks
     def drain(self) -> list[bytes]:
         """Return completed utterances available *now*, never blocking.
 

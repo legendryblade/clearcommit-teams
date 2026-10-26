@@ -415,7 +415,7 @@ class Bridge:
         return self._execute("audio_devices", self._audio_devices, payload)
 
     def _audio_devices(self, _payload: Mapping[str, Any]) -> dict:
-        from .audio import availability, list_microphones, list_output_devices
+        from .audio import availability, list_microphones, loopback_devices
 
         state = availability()
         if not state.available:
@@ -426,11 +426,9 @@ class Bridge:
             "microphones": [
                 {"index": idx, "name": name} for idx, name in list_microphones()
             ],
-            "outputs": [
-                {"index": idx, "name": name, "channels": mo}
-                for idx, name, _inputs, mo in list_output_devices()
-                if mo > 0
-            ],
+            # Only WASAPI loopback endpoints capture what the machine plays, so
+            # these are the only valid choices for the "call audio" side.
+            "outputs": [{"index": idx, "name": name} for idx, name in loopback_devices()],
         }
 
     def audio_start(self, payload: Any = None) -> dict:
@@ -442,40 +440,93 @@ class Bridge:
         if self._capture is not None and self._capture.active:
             raise ValidationError("A recording is already in progress.")
         source = str(payload.get("source") or "microphone").strip().lower()
+        include_system = bool(payload.get("include_system")) or source == "both"
+        if source == "both":
+            source = "microphone"
         if source not in ("microphone", "system"):
-            raise ValidationError("source must be microphone or system.")
+            raise ValidationError("source must be microphone, system or both.")
         device = payload.get("device")
         if device is not None:
             try:
                 device = int(device)
             except (TypeError, ValueError) as exc:
                 raise ValidationError("The device must be a device index.") from exc
-        session = CaptureSession(source, device)
+        system_device = payload.get("system_device")
+        if system_device is not None:
+            try:
+                system_device = int(system_device)
+            except (TypeError, ValueError) as exc:
+                raise ValidationError("The system device must be a device index.") from exc
+
+        # In a 1:1 call we listen to both sides at once: the microphone is the
+        # person using ClearCommit, the system audio is the other participant.
+        session = CaptureSession(
+            source,
+            device if source == "microphone" else None,
+            system_device=system_device,
+            include_system=include_system,
+        )
         session.start()
         self._capture = session
-        self._capture_source = source
-        return {"active": True, "source": source}
+        self._capture_source = "both" if include_system else source
+        return {
+            "active": True,
+            "source": self._capture_source,
+            "system": session._system_capture is not None,
+            "microphone": session._capture is not None,
+        }
 
     def audio_poll(self, payload: Any = None) -> dict:
         return self._execute("audio_poll", self._audio_poll, payload)
 
-    def _audio_poll(self, _payload: Mapping[str, Any]) -> dict:
-        """Transcribe whatever accumulated since the last poll."""
+    def _audio_poll(self, payload: Mapping[str, Any]) -> dict:
+        """Transcribe whatever accumulated since the last poll.
+
+        When both sides are being captured, the source of each chunk is the
+        speaker: microphone is the ClearCommit user ('rep'), system audio is
+        the other participant ('customer'). That labelling is exact, whereas
+        model-based diarization would only be a guess between two channels.
+        """
         if self._capture is None:
-            return {"active": False, "segments": 0, "text": ""}
+            return {"active": False, "segments": 0, "text": "", "turns": []}
         from .audio.transcribe import get_transcriber
 
-        chunks = self._capture.drain()
-        if not chunks:
-            return {"active": self._capture.active, "segments": 0, "text": ""}
-        transcriber = get_transcriber()
-        parts = []
-        for wav in chunks:
-            parts.append(transcriber.transcribe(wav).text)
+        provider = str(payload.get("provider") or "groq").strip().lower()
+        pairs = self._capture.drain_both()
+        if not pairs:
+            return {
+                "active": self._capture.active,
+                "segments": 0,
+                "text": "",
+                "turns": [],
+            }
+
+        transcriber = get_transcriber(provider)
+        texts: list[str] = []
+        turns: list[dict] = []
+        for source, wav in pairs:
+            if hasattr(transcriber, "transcribe_turns"):
+                segments = transcriber.transcribe_turns(wav)
+            else:
+                segments = [transcriber.transcribe(wav)]
+            for segment in segments:
+                if not segment.text:
+                    continue
+                texts.append(segment.text)
+                turns.append(
+                    {
+                        "speaker": "rep" if source == "microphone" else "customer",
+                        "source": source,
+                        "text": segment.text,
+                        "model_speaker": getattr(segment, "speaker", None),
+                    }
+                )
         return {
             "active": self._capture.active,
-            "segments": len(parts),
-            "text": " ".join(parts).strip(),
+            "segments": len(texts),
+            "text": " ".join(texts).strip(),
+            "turns": turns,
+            "provider": provider,
         }
 
     def audio_stop(self, payload: Any = None) -> dict:

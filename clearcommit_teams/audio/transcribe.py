@@ -1,4 +1,4 @@
-"""Transcription behind a small interface.
+﻿"""Transcription behind a small interface.
 
 The capture layer produces WAV bytes; this module turns them into text. The
 provider is replaceable: :class:`GroqTranscriber` is the first adapter, and
@@ -23,6 +23,7 @@ class TranscriptSegment:
     text: str
     language: str | None = None
     duration_s: float | None = None
+    speaker: str | None = None
 
 
 class TranscriptionError(RuntimeError):
@@ -50,16 +51,27 @@ def groq_key() -> str | None:
 
 
 def provider_status() -> dict:
-    key = groq_key()
+    groq = groq_key()
+    deepgram = deepgram_key()
     return {
         "provider": "groq-whisper",
-        "configured": bool(key),
+        "configured": bool(groq),
         "model": "whisper-large-v3-turbo",
         "detail": (
             "Groq Whisper is configured."
-            if key
+            if groq
             else "Set GROQ_API_KEY to enable live transcription."
         ),
+        "diarization": {
+            "provider": "deepgram-nova",
+            "configured": bool(deepgram),
+            "model": "nova-3",
+            "detail": (
+                "Speaker separation is available."
+                if deepgram
+                else "Set DEEPGRAM_API_KEY to enable speaker separation."
+            ),
+        },
     }
 
 
@@ -137,5 +149,175 @@ class GroqTranscriber:
         )
 
 
-def get_transcriber() -> Transcriber:
+def deepgram_key() -> str | None:
+    for name in ("DEEPGRAM_API_KEY", "CLEARCOMMIT_DEEPGRAM_API_KEY"):
+        value = (os.environ.get(name) or "").strip()
+        if value:
+            return value
+    return None
+
+
+class DeepgramTranscriber:
+    """Deepgram Nova with speaker diarization.
+
+    Returns one segment per speaker turn, so the caller can label who said
+    what. Used when the caller asks for speaker separation; Groq remains the
+    faster default when labels are not needed.
+    """
+
+    name = "deepgram-nova"
+
+    def __init__(self, api_key: str | None = None, model: str = "nova-3"):
+        self.api_key = api_key or deepgram_key()
+        self.model = model
+        if not self.api_key:
+            raise TranscriptionError(
+                "Speaker separation needs DEEPGRAM_API_KEY to be set.",
+                code="provider_not_configured",
+            )
+
+    def transcribe_turns(
+        self, wav_bytes: bytes, language: str | None = None
+    ) -> list[TranscriptSegment]:
+        if not wav_bytes:
+            raise TranscriptionError("No audio was captured.", code="empty_audio")
+        if len(wav_bytes) > MAX_AUDIO_BYTES:
+            raise TranscriptionError(
+                "That audio chunk is too large to transcribe.", code="audio_too_large"
+            )
+
+        import httpx
+
+        params: list[tuple[str, str]] = [
+            ("model", self.model),
+            ("smart_format", "true"),
+            ("punctuate", "true"),
+            ("utterances", "true"),
+            ("diarize_model", "latest"),
+        ]
+        if language:
+            params.append(("language", language))
+
+        try:
+            response = httpx.post(
+                "https://api.deepgram.com/v1/listen",
+                params=params,
+                headers={
+                    "Authorization": f"Token {self.api_key}",
+                    "Content-Type": "audio/wav",
+                },
+                content=wav_bytes,
+                timeout=60.0,
+            )
+        except httpx.TimeoutException as exc:
+            raise TranscriptionError(
+                "The transcription provider timed out.", code="provider_timeout", retryable=True
+            ) from exc
+        except httpx.HTTPError as exc:
+            raise TranscriptionError(
+                "The transcription provider is unreachable.",
+                code="provider_unavailable",
+                retryable=True,
+            ) from exc
+
+        if response.status_code in (401, 403):
+            raise TranscriptionError(
+                "The transcription provider rejected the API key.", code="provider_auth"
+            )
+        if response.status_code == 429:
+            raise TranscriptionError(
+                "The transcription provider is rate limiting. Try again shortly.",
+                code="provider_rate_limit",
+                retryable=True,
+            )
+        if response.status_code >= 400:
+            raise TranscriptionError(
+                f"The transcription provider returned {response.status_code}.",
+                code="provider_error",
+                retryable=response.status_code >= 500,
+            )
+
+        try:
+            payload = response.json()
+        except ValueError as exc:
+            raise TranscriptionError(
+                "The transcription provider returned an unreadable response.",
+                code="provider_error",
+            ) from exc
+
+        return parse_deepgram(payload)
+
+
+def _deepgram_speaker(raw: object) -> str | None:
+    """Normalise Deepgram's integer speaker into SPEAKER_00 form."""
+    if raw is None:
+        return None
+    try:
+        return f"SPEAKER_{int(raw):02d}"
+    except (TypeError, ValueError):
+        return None
+
+
+def parse_deepgram(payload: dict) -> list[TranscriptSegment]:
+    """Turn a Deepgram response into speaker-labelled segments."""
+    results = (payload or {}).get("results") or {}
+    utterances = results.get("utterances") or []
+    segments: list[TranscriptSegment] = []
+    if utterances:
+        for utterance in utterances:
+            text = str(utterance.get("transcript") or "").strip()
+            if not text:
+                continue
+            start = float(utterance.get("start") or 0.0)
+            end = float(utterance.get("end") or 0.0)
+            segments.append(
+                TranscriptSegment(
+                    text=text,
+                    language=None,
+                    duration_s=max(0.0, end - start),
+                    speaker=_deepgram_speaker(utterance.get("speaker")),
+                )
+            )
+        return segments
+
+    # Fall back to the flat transcript when no utterance breakdown is present.
+    channels = results.get("channels") or []
+    alternative = (channels[0].get("alternatives") if channels else None) or [{}]
+    text = str((alternative[0] or {}).get("transcript") or "").strip()
+    if text:
+        segments.append(TranscriptSegment(text=text))
+    return segments
+
+
+class DiarizingTranscriber:
+    """Adapter exposing turn-based diarization through the single-segment API.
+
+    ``transcribe()`` returns the joined text with the first speaker attached so
+    existing callers keep working; ``transcribe_turns()`` returns every turn.
+    """
+
+    name = "deepgram-nova"
+
+    def __init__(self, inner: DeepgramTranscriber | None = None):
+        self.inner = inner or DeepgramTranscriber()
+
+    def transcribe_turns(self, wav_bytes: bytes, language: str | None = None):
+        return self.inner.transcribe_turns(wav_bytes, language)
+
+    def transcribe(self, wav_bytes: bytes, language: str | None = None) -> TranscriptSegment:
+        turns = self.transcribe_turns(wav_bytes, language)
+        if not turns:
+            raise TranscriptionError("No speech was recognised in that audio.", code="empty_transcript")
+        return TranscriptSegment(
+            text=" ".join(turn.text for turn in turns).strip(),
+            language=language,
+            duration_s=sum(turn.duration_s or 0.0 for turn in turns) or None,
+            speaker=turns[0].speaker,
+        )
+
+
+def get_transcriber(provider: str = "groq") -> Transcriber:
+    """Return a transcriber. Groq is the default; Deepgram adds speakers."""
+    if str(provider).strip().lower() in {"deepgram", "diarize", "speakers"}:
+        return DiarizingTranscriber()
     return GroqTranscriber()

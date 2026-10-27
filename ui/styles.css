@@ -3453,13 +3453,26 @@ body.is-web #capture-panel,
 body.is-web [data-view="desk"],
 body.is-web [data-view="coach"],
 body.is-web [data-view="playbook"],
-body.is-web [data-view="signals"] {
+body.is-web [data-view="signals"],
+body.is-web [data-view="interpret"] {
+  display: none !important;
+}
+
+/* In the web build only the team workspace exists: hide every local view so
+   a stale active view can never render desktop-only panels in a browser. */
+body.is-web #view-desk,
+body.is-web #view-coach,
+body.is-web #view-playbook,
+body.is-web #view-signals,
+body.is-web #view-interpret {
+  display: none !important;
+}
   display: none !important;
 }
 
 /* In the web build the team workspace is the product, so make it the view. */
 body.is-web .rail-workspaces .workspace-link:not([data-view="team"]) {
-  display: none;
+  display: none !important;
 }
 body.is-web .rail-conversations {
   display: none;

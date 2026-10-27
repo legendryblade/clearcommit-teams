@@ -1,33 +1,29 @@
 # ClearCommit Teams
 
-A local Windows desktop workspace that turns finished sales-conversation transcripts into evidence-linked coaching, then into a team playbook that a manager reviews and approves.
+Turn a finished sales conversation into evidence-linked coaching, then into
+guidance a manager reviews and the team actually follows.
 
-This is an independent implementation. No source code was copied from the original `D:\new dir` application, which has no license file. The product framing and screens were rebuilt from scratch around a finalized-transcript workflow. See `docs/baseline-inventory.md` for the isolation record.
+Two surfaces share one backend:
 
-## What it does
+- **Desktop app** (Windows, Python + pywebview) — works on a conversation
+  locally: transcript, coaching, commitments, playbook, live interpretation.
+- **Team workspace** (web + FastAPI + Supabase) — accounts, organizations,
+  roles, shared calls, commitments, review and approved playbooks.
 
-1. **Conversation desk** - open a seeded sample or create a conversation, then import a finalized transcript or add one line at a time.
-2. **Select evidence** - tick the exact lines the coach should read. Every observation must cite those lines.
-3. **Sales coach** - the demo coach returns observations, an exact quote, why it matters, a suggested alternative, a recommended action, and the limits of the inference. Filter by objection, unanswered question, ambiguity, discovery, or next step.
-4. **Ask the evidence** - ask a question about up to six selected lines and get an answer with citations. Answers are kept per conversation.
-5. **Team playbook** - promote an observation into a draft entry, edit the scenario, response, discovery questions, and reviewer, then approve it. Editing approved guidance reopens review. Every approval is recorded locally with the reviewer name and a timestamp.
-6. **Team signals** - an aggregate preview of approved guidance, conversation evidence, and coaching mix. It never ranks individual employees.
+This is an independent implementation. No source was copied from the original
+`D:\new dir` interpreter, which has no license. See
+[`docs/baseline-inventory.md`](docs/baseline-inventory.md) for the isolation
+record.
 
-## Scope and guardrails
+## Run it
 
-- **Finalized transcripts only.** This build does not open a microphone, claim a live transcription state, or run machine translation. Translations are supplied with the text.
-- **The demo coach is deterministic and offline.** It uses rules over the selected words only. It cannot hear tone and does not claim to know customer intent.
-- **A real provider is optional.** An OpenAI-compatible chat-completions endpoint can be configured in Settings. The API key is read only from the environment variable `CLEARCOMMIT_TEAMS_API_KEY`; it is never stored in the database, returned by the bridge, or written to logs.
-- **Local review, not accounts.** Approval records a reviewer name in the local workspace. There are no accounts, authentication, cloud sync, or simulated teammates.
-- **The workspace stays inside the project.** Data defaults to `data/clearcommit-teams.db`. A `--data-dir` or `CLEARCOMMIT_TEAMS_DATA_DIR` override is accepted only inside the project root.
+### Desktop app
 
-## Quick start (Windows)
+```powershell
+launch.bat
+```
 
-Requirements: Windows 10/11 with the Microsoft Edge WebView2 runtime (included with current Windows/Edge), Python 3.11 or newer.
-
-Double-click `launch.bat`. On first run it creates `.venv`, installs the pinned desktop dependency, and opens the app.
-
-Or from a terminal in the project folder:
+Or:
 
 ```powershell
 py -3 -m venv .venv
@@ -35,94 +31,103 @@ py -3 -m venv .venv
 & ".venv\Scripts\python.exe" -m clearcommit_teams
 ```
 
-The first launch seeds three clearly labeled fictional sample conversations. The app is usable immediately with no account or network connection.
-
-### Useful commands
+### Team workspace (local, no cloud)
 
 ```powershell
-# Environment and database check (no window)
-& ".venv\Scripts\python.exe" -m clearcommit_teams --check
-
-# Same UI in a loopback-only browser dev server (default port 8765)
-& ".venv\Scripts\python.exe" -m clearcommit_teams --web
-
-# Use a separate workspace folder (must stay inside the project)
-& ".venv\Scripts\python.exe" -m clearcommit_teams --data-dir data\scratch
-
-# Version
-& ".venv\Scripts\python.exe" -m clearcommit_teams --version
+launch-team.bat
 ```
 
-To reset the workspace, close the app and delete `data\clearcommit-teams.db`. The samples are seeded again on the next launch.
+Starts the API on `127.0.0.1:8770` and the web UI on
+`http://127.0.0.1:8765`, then opens the browser. Data lives in Supabase; the
+service is stateless.
 
-## Provider configuration
+### Hosted
 
-Open the provider chip in the top-right corner (or the gear button) and choose **Configured provider**. Enter a base URL such as `https://api.example.com/v1`, the model name, and a timeout. Then set the key in the environment before launching:
+- Web: https://ui-five-blue.vercel.app
+- API: https://clearcommit-teams-api.onrender.com
 
-```powershell
-$env:CLEARCOMMIT_TEAMS_API_KEY = "..."
-& ".venv\Scripts\python.exe" -m clearcommit_teams
-```
+## What each surface does
 
-Only the lines you explicitly select are sent to the endpoint. The bridge never returns the key, and the status panel reports only whether it is present. If the provider is not configured, the app says which fields are missing and the demo coach remains available.
+**Desktop** (needs the local Python bridge):
+
+| Area | Purpose |
+| --- | --- |
+| Conversation desk | Import or type a finalized transcript |
+| Live capture | Microphone and/or system audio → transcript |
+| Sales coach | Evidence-linked observations; every claim cites a line |
+| Ask the evidence | Questions over selected lines, with citations |
+| Interpretation | Two columns: their speech translated for you, your speech translated for them, optionally voiced |
+| Playbook | Draft → reviewer → approval |
+| Team workspace | Same web view, inside the app |
+
+**Web** (team only — a browser has no audio or local database):
+
+| Tab | Purpose |
+| --- | --- |
+| Overview | Needs attention, team counts |
+| Calls | My calls (employee) or Team calls by teammate (manager) |
+| Insights | Private and shared observations |
+| Commitments | Promises with owner, due date, status, history |
+| Playbook | Approved guidance and the review queue |
+| Team | Members, roles, invitations, per-member view |
+| Settings | Companies and join code |
+
+## Joining a team
+
+A manager creates a company and gets a short code (for example `Z9D9GRE7`).
+An employee signs in, types the code, and is in. The code identifies the
+company only; the role comes from a pending invitation matched to the verified
+email, otherwise it defaults to `sales_rep`. A leaked code cannot grant
+manager rights.
+
+## Verified behaviour
+
+- Two accounts in one organization; manager and employee UIs differ
+- Private conversations return 404 to teammates, including managers, until shared
+- Cross-organization access denied on every tested route
+- A commitment is created as *needs confirmation* and only opens when a person
+  confirms the owner and the date
+- Every commitment change is written to a history table
+- Join codes are idempotent; wrong codes are refused
+- 190 automated tests
 
 ## Development
 
 ```powershell
-# Python tests
 & ".venv\Scripts\python.exe" -m pip install -r requirements-dev.txt
-& ".venv\Scripts\python.exe" -m pytest -q
-
-# Bridge client tests (Node 22+)
-node --test tests\ui_bridge.test.cjs
+& ".venv\Scripts\python.exe" -m pytest -q          # 190 tests
+node --test tests\ui_bridge.test.cjs              # bridge client
 ```
 
-Build a Windows app (optional):
+Deployment: [`docs/deployment.md`](docs/deployment.md) ·
+Supabase: [`docs/supabase-go-live.md`](docs/supabase-go-live.md) ·
+API: [`docs/api.md`](docs/api.md) ·
+Architecture: [`docs/cloud-architecture.md`](docs/cloud-architecture.md) ·
+Audio: [`docs/audio-roadmap.md`](docs/audio-roadmap.md)
 
-```powershell
-powershell -ExecutionPolicy Bypass -File build.ps1
-```
+## Privacy
 
-The script installs PyInstaller into `.venv` if needed and writes `dist\ClearCommitTeams\ClearCommitTeams.exe`, which runs without Python installed and keeps its workspace in `data\` next to the executable. It needs the Edge WebView2 runtime, included with current Windows and Edge.
+- Conversations are private to their author until explicitly shared.
+- Sharing an insight shares the selected quotes, never the transcript.
+- Managers see shared work and counts, never private coaching or scores.
+- Raw audio is transcribed locally and not stored.
+- Provider keys are read from the environment and never stored, returned, or
+  logged.
 
-Project layout:
+## Known limitations
 
-```text
-app_entry.py        packaged-build entry point
-build.ps1           PyInstaller build script
-clearcommit_teams\
-  app.py            pywebview desktop entry
-  bridge.py         public bridge methods and response envelope
-  coaching.py       analysis, assistant, and playbook service
-  repository.py     SQLite persistence and sample seeding
-  models.py         validation and finalized-transcript parser
-  devserver.py      loopback-only --web server
-  providers\        mock coach, OpenAI-compatible adapter, registry
-  demo_data.py      three fictional sample conversations
-ui\
-  index.html        app shell and dialogs
-  styles.css        editorial design system
-  js\bridge.js      pywebview/HTTP bridge client
-  js\app.js         view rendering and workflows
-tests\              pytest suite and Node bridge tests
-docs\               isolation and baseline record
-```
+1. **Live capture is unreliable on this machine.** The working microphone only
+   exposes a Windows host API that cannot stream. The pipeline is implemented
+   and returns transcripts in testing; the device is the blocker.
+2. **Interpretation** works through the API (English→Urdu 0.46s, English→Arabic
+   with speech 2.09s); the two-column view is new and not fully exercised.
+3. **Sync is explicit.** A desktop conversation reaches the team only when the
+   user presses *Save to cloud*.
+4. No email invitations (join codes instead), no CRM, no rate limit on code
+   attempts, no code rotation.
+5. No employee performance scores. The available data cannot support them and
+   the product must not imply them.
 
-## Privacy notes
+## License
 
-- The database, WebView2 profile, and any provider configuration live under the project's `data` folder.
-- The desktop app loads local files. The optional `--web` server binds only to `127.0.0.1` and is meant for local development.
-- The app never sends audio. With the demo coach, no network request is made at all.
-
-## Status
-
-Version 0.2.0.
-
-Two workspaces share one desktop client:
-
-- **Local workspace** (up to v0.1.0): transcript intake, selection, analysis, grounded questions, playbook draft/review/approval, team signals, local persistence. Works offline.
-- **Team workspace** (new): FastAPI backend, accounts, organizations, invitations, roles, private conversations, explicit insight sharing, review/approval, shared playbook, approved messaging, audit trail, live events, offline honesty.
-
-See [`docs/network-mode.md`](docs/network-mode.md) for the architecture, privacy model, and honest limitation list; [`docs/api.md`](docs/api.md) for the API; [`docs/deployment.md`](docs/deployment.md) for setup and the two-user acceptance test.
-
-Real Supabase Auth and the PostgreSQL RLS migration are implemented but were **not** executed in this environment because no Supabase project credentials were available. Demo mode is a real networked multi-user service with local credentials, and is labeled as such in the UI.
+MIT — see [LICENSE](LICENSE).

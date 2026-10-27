@@ -430,9 +430,13 @@
     ui.playbookNavCount.hidden = drafts === 0;
   }
 
+  // Views that need the local Python bridge. A browser cannot use them.
+  const WEB_BLOCKED_VIEWS = ["desk", "coach", "playbook", "signals", "interpret"];
+
   function setView(view, options) {
     const opts = options || {};
     if (!Object.prototype.hasOwnProperty.call(VIEW_ELEMENTS, view)) return;
+    if (!isDesktopShell() && WEB_BLOCKED_VIEWS.indexOf(view) !== -1) view = "team";
     state.view = view;
     document.querySelectorAll("[data-view]").forEach(function (button) {
       const active = button.dataset.view === view;
@@ -2509,11 +2513,25 @@
   function applyWebMode() {
     if (isDesktopShell()) return;
     document.body.classList.add("is-web");
+    // A browser has no local workspace, so land on the team view rather than
+    // an empty transcript desk that cannot do anything.
+    if (!VIEW_ELEMENTS.team) return;
+    state.view = "team";
+    Object.keys(VIEW_ELEMENTS).forEach(function (key) {
+      if (VIEW_ELEMENTS[key]) VIEW_ELEMENTS[key].hidden = key !== "team";
+    });
   }
 
+  // The desktop shell is pywebview, full stop. A browser on 127.0.0.1 is
+  // still a browser: no audio devices, no local database. Treating loopback
+  // as "desktop" is why the web build showed panels it cannot use.
+  // A browser is any page served over http(s): it has the loopback dev server,
+  // and it has no desktop bridge even when it runs on 127.0.0.1. pywebview
+  // loads from file:// and only then injects window.pywebview.
   function isDesktopShell() {
-    const host = window.location.hostname;
-    return Boolean(window.pywebview) || host === "localhost" || host === "127.0.0.1";
+    if (window.pywebview) return true;
+    var protocol = window.location.protocol;
+    return protocol !== "http:" && protocol !== "https:";
   }
 
   function handleAction(action) {
@@ -2569,6 +2587,9 @@
   }
 
   function init() {
+    // Decide the build type before anything renders: a browser must never show
+    // the local workspace, whichever way boot ends.
+    applyWebMode();
     ui.bootRetry.addEventListener("click", function () {
       void boot();
     });
@@ -2646,7 +2667,6 @@
     renderSelection();
     renderAssistantNotes();
     initOnboarding();
-    applyWebMode();
     void initCapture();
     if (ui.captureSource) {
       ui.captureSource.addEventListener("change", function () {

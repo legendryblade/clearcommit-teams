@@ -47,6 +47,8 @@
     "audio_start",
     "audio_poll",
     "audio_stop",
+    "interpret_status",
+    "interpret",
   ]);
 
   const METHOD_SET = new Set(METHODS);

@@ -99,8 +99,15 @@
                 <span class="workspace-note">Aggregate view</span>
               </span>
             </button>
-            <button class="workspace-link" type="button" data-view="team">
+                        <button class="workspace-link" type="button" data-view="interpret">
               <span class="workspace-index">05</span>
+              <span class="workspace-copy">
+                <span class="workspace-name">Interpretation</span>
+                <span class="workspace-note">Two-way live translation</span>
+              </span>
+            </button>
+            <button class="workspace-link" type="button" data-view="team">
+              <span class="workspace-index">06</span>
               <span class="workspace-copy">
                 <span class="workspace-name">Team workspace</span>
                 <span class="workspace-note">Networked · shared playbook</span>
@@ -204,38 +211,6 @@
               </div>
               <ol class="capture-segments" id="capture-segments" aria-live="polite"></ol>
 
-              <div class="interpret-block" id="interpret-block" hidden>
-                <div class="capture-controls">
-                  <label class="capture-field">
-                    <span class="capture-label">Their language</span>
-                    <select class="capture-input" id="interpret-target"></select>
-                  </label>
-                  <label class="capture-field">
-                    <span class="capture-label">Speak my replies on</span>
-                    <select class="capture-input" id="interpret-device"></select>
-                  </label>
-                  <label class="interpret-toggle">
-                    <input type="checkbox" id="interpret-speak" />
-                    <span>Voice my replies to them</span>
-                  </label>
-                </div>
-                <div class="interpret-columns">
-                  <div class="interpret-column">
-                    <p class="panel-kicker">They say (translated for you)</p>
-                    <ol class="interpret-lines" id="interpret-caller"></ol>
-                    <p class="interpret-empty" id="interpret-caller-empty">Waiting for the other person.</p>
-                  </div>
-                  <div class="interpret-column is-mine">
-                    <p class="panel-kicker">You say (translated for them)</p>
-                    <ol class="interpret-lines" id="interpret-mine"></ol>
-                    <p class="interpret-empty" id="interpret-mine-empty">Your speech appears here.</p>
-                  </div>
-                </div>
-                <p class="capture-note" id="interpret-note">
-                  Both sides are transcribed. Their words are shown to you in your language; yours
-                  are translated and, if enabled, spoken to them.
-                </p>
-              </div>
             </section>
 
             <section class="transcript-panel" aria-labelledby="transcript-heading">
@@ -558,7 +533,66 @@
           </div>
         </section>
 
-        <section class="view" id="view-team" data-view-panel="team" hidden>
+                <section class="view" id="view-interpret" data-view-panel="interpret" hidden>
+          <header class="view-head">
+            <div class="view-head-copy">
+              <p class="eyebrow">Live interpretation <span class="eyebrow-divider">/</span> Two-way</p>
+              <h1 id="interpret-title" tabindex="-1">Interpretation</h1>
+              <p class="view-subtitle">Your speech is translated and can be spoken to the other person. Their speech is transcribed and shown to you in your language.</p>
+            </div>
+            <div class="view-actions">
+              <button class="button button-primary" id="interpret-start" type="button">Start listening</button>
+              <button class="button button-quiet" id="interpret-stop" type="button" disabled>Stop</button>
+              <span class="status-chip status-chip-quiet" id="interpret-status">Idle</span>
+            </div>
+          </header>
+
+          <div class="inline-alert" id="interpret-alert" role="status" hidden></div>
+
+          <div class="interpret-panel">
+            <div class="interpret-controls">
+              <label class="capture-field">
+                <span class="capture-label">Their language</span>
+                <select class="capture-input" id="interpret-target"></select>
+              </label>
+              <label class="capture-field">
+                <span class="capture-label">Your microphone</span>
+                <select class="capture-input" id="interpret-mic"></select>
+              </label>
+              <label class="capture-field">
+                <span class="capture-label">Their audio (call output)</span>
+                <select class="capture-input" id="interpret-system"></select>
+              </label>
+              <label class="capture-field">
+                <span class="capture-label">Speak my replies on</span>
+                <select class="capture-input" id="interpret-device"></select>
+              </label>
+              <label class="interpret-toggle">
+                <input type="checkbox" id="interpret-speak" />
+                <span>Voice my replies to them</span>
+              </label>
+            </div>
+
+            <div class="interpret-columns">
+              <div class="interpret-column">
+                <p class="panel-kicker">They say (translated for you)</p>
+                <ol class="interpret-lines" id="interpret-caller"></ol>
+                <p class="interpret-empty" id="interpret-caller-empty">Waiting for the other person.</p>
+              </div>
+              <div class="interpret-column is-mine">
+                <p class="panel-kicker">You say (translated for them)</p>
+                <ol class="interpret-lines" id="interpret-mine"></ol>
+                <p class="interpret-empty" id="interpret-mine-empty">Your speech appears here.</p>
+              </div>
+            </div>
+
+            <p class="capture-note">
+              Both sides are transcribed locally. Only text is sent to the transcription and translation
+              providers. Raw audio stays on this computer.
+            </p>
+          </div>
+        </section>
+<section class="view" id="view-team" data-view-panel="team" hidden>
           <header class="view-head">
             <div class="view-head-copy">
               <p class="eyebrow">Team workspace <span class="eyebrow-divider">/</span> Networked</p>

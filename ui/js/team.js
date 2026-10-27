@@ -1328,78 +1328,144 @@
       return null;
     }
     const name = (member.profile && member.profile.display_name) || member.user_id;
-    const card = el("div", "team-card");
+    const card = el("div", "team-card team-member-detail");
+
     const head = el("div", "calls-head");
-    head.append(el("h3", "team-card-title", name));
-    head.append(button("Back", "button-quiet", function () {
+    const title = el("div", "member-detail-head");
+    title.append(el("span", "profile-avatar is-small", initials(name)));
+    const copy = el("div", "member-names");
+    copy.append(el("span", "member-name", name));
+    copy.append(el("span", "member-mail", roleLabel(member.role) + " \u00b7 " + ((member.profile && member.profile.email) || "")));
+    title.append(copy);
+    head.append(title);
+    head.append(button("Back to team", "button-quiet", function () {
       state.memberView = null;
       render();
     }));
     card.append(head);
-    card.append(el("p", "team-card-note", roleLabel(member.role) + " · " + ((member.profile && member.profile.email) || "")));
 
-    const calls = state.conversations.filter(function (c) {
-      return c.owner_id === member.user_id;
-    });
-    const insights = (state.sharedInsights || []).filter(function (i) {
-      return i.owner_id === member.user_id;
-    });
+    const calls = (state.conversations || []).filter(function (c) { return c.owner_id === member.user_id; });
+    const insights = (state.sharedInsights || []).filter(function (i) { return i.owner_id === member.user_id; });
+    const commits = (state.commitmentsTeam || []).filter(function (c) { return c.owner_id === member.user_id; });
 
     const stats = el("div", "team-stats");
-    function stat(value, label) {
-      const box = el("div", "team-stat");
+    function stat(value, label, tone) {
+      const box = el("div", "team-stat" + (tone ? " is-" + tone : ""));
       box.append(el("span", "team-stat-value", String(value)));
       box.append(el("span", "team-stat-label", label));
       return box;
     }
     stats.append(
       stat(calls.length, calls.length === 1 ? "shared call" : "shared calls"),
-      stat(insights.length, insights.length === 1 ? "shared insight" : "shared insights")
+      stat(insights.length, insights.length === 1 ? "shared insight" : "shared insights"),
+      stat(commits.filter(function (c) { return c.status !== "done"; }).length, "open commitments"),
+      stat(commits.filter(function (c) { return c.status === "blocked"; }).length, "blocked", "attention")
     );
     card.append(stats);
 
     if (calls.length) {
+      card.append(el("h4", "commit-subhead", "Shared calls"));
       const list = el("div", "team-list");
       calls.forEach(function (c) {
         const row = el("div", "team-row");
         row.append(el("span", "team-row-title", c.title));
-        row.append(el("span", "team-row-meta", (c.line_count || 0) + " lines · shared"));
+        row.append(el("span", "team-row-meta", (c.line_count || 0) + " lines"));
         list.append(row);
       });
       card.append(list);
     }
+
+    if (commits.length) {
+      card.append(el("h4", "commit-subhead", "Commitments"));
+      const list = el("div", "commit-list");
+      commits.forEach(function (c) { list.append(commitmentRow(c)); });
+      card.append(list);
+    }
+
     if (insights.length) {
+      card.append(el("h4", "commit-subhead", "Shared insights"));
       const list = el("div", "team-list");
       insights.forEach(function (i) {
         const row = el("div", "team-row");
         row.append(el("span", "team-row-title", i.title));
-        row.append(el("span", "team-row-meta", i.category || "observation"));
+        row.append(el("span", "team-row-meta", i.visibility === "shared" ? "shared" : "private"));
         list.append(row);
       });
       card.append(list);
     }
+
     card.append(
       el(
         "p",
         "team-scope-note",
-        "Only work " + name + " chose to share appears here. Private calls and coaching stay private."
+        "Only work " + name + " chose to share appears here. Private calls and personal coaching stay private."
       )
     );
     return card;
   }
+
   function renderTeam() {
-    const card = el("div", "team-card");
-    card.append(el("h3", "team-card-title", "Members"));
-    const list = el("div", "team-list");
+    const reviewer = canReview();
+    const card = el("div", "team-card team-members");
+    const head = el("div", "calls-head");
+    head.append(el("h3", "team-card-title", "Team"));
+    head.append(el("span", "calls-total", state.members.length + " members"));
+    card.append(head);
+
+    const list = el("div", "member-list");
     state.members.forEach(function (member) {
-      const row = el("div", "team-row");
-      row.append(el("span", "team-row-title", (member.profile && member.profile.display_name) || member.user_id));
-      row.append(el("span", "team-row-meta", roleLabel(member.role) + " · " + (member.profile && member.profile.email)));
+      const name = (member.profile && member.profile.display_name) || member.user_id;
+      const calls = (state.conversations || []).filter(function (c) {
+        return c.owner_id === member.user_id;
+      });
+      const sharedCalls = calls.filter(function (c) { return c.visibility === "shared"; });
+      const insights = (state.sharedInsights || []).filter(function (i) {
+        return i.owner_id === member.user_id;
+      });
+      const commits = (state.commitmentsTeam || []).filter(function (c) {
+        return c.owner_id === member.user_id;
+      });
+      const openCommits = commits.filter(function (c) {
+        return c.status === "open" || c.status === "awaiting_confirmation";
+      }).length;
+      const blockedCommits = commits.filter(function (c) { return c.status === "blocked"; }).length;
+
+      const row = el("div", "member-row");
+      const who = el("div", "member-who");
+      who.append(el("span", "profile-avatar is-small", initials(name)));
+      const names = el("div", "member-names");
+      names.append(el("span", "member-name", name + (member.user_id === (state.me && state.me.profile && state.me.profile.user_id) ? " (you)" : "")));
+      names.append(el("span", "member-mail", (member.profile && member.profile.email) || ""));
+      who.append(names);
+      row.append(who);
+
+      const stats = el("div", "member-stats");
+      function chip(value, label, tone) {
+        const c = el("span", "member-chip" + (tone ? " is-" + tone : ""));
+        c.append(el("strong", null, String(value)));
+        c.append(document.createTextNode(" " + label));
+        return c;
+      }
+      stats.append(chip(sharedCalls.length, "calls shared"));
+      stats.append(chip(insights.length, "insights"));
+      if (openCommits) stats.append(chip(openCommits, "open commitments", "attention"));
+      if (blockedCommits) stats.append(chip(blockedCommits, "blocked", "danger"));
+      row.append(stats);
+
+      if (reviewer) {
+        row.append(button("Open", "button-quiet", function () {
+          state.memberView = member.user_id;
+          setTab("team");
+          render();
+        }));
+      }
       list.append(row);
     });
     card.append(list);
 
-    if (canReview()) {
+    if (reviewer) {
+      const inviteHead = el("h4", "commit-subhead", "Add an employee");
+      card.append(inviteHead);
       const form = el("form", "team-form team-inline");
       dom.inviteEmail = el("input", "team-input");
       dom.inviteEmail.type = "email";
@@ -1422,7 +1488,7 @@
         state.invitations.forEach(function (invitation) {
           const row = el("div", "team-row");
           row.append(el("span", "team-row-title", invitation.email));
-          row.append(el("span", "team-row-meta", "Pending · " + roleLabel(invitation.role)));
+          row.append(el("span", "team-row-meta", "Pending \u00b7 " + roleLabel(invitation.role)));
           row.append(el("code", "team-code", invitation.invitation_id));
           invites.append(row);
         });
@@ -1435,8 +1501,53 @@
     return card;
   }
 
-  // What needs attention today, from the reminders endpoint. Counts are
-  // computed server-side from commitments the caller may already see.
+  function activeOrg() {
+    return (state.organizations || []).find(function (o) {
+      return o.org_id === state.orgId;
+    }) || null;
+  }
+
+  function initials(text) {
+    return String(text || "?")
+      .split(/[\s@._-]+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map(function (part) { return part[0].toUpperCase(); })
+      .join("");
+  }
+
+  function renderProfileBar() {
+    const bar = el("div", "profile-bar");
+    const profile = (state.me && state.me.profile) || {};
+    const org = activeOrg();
+
+    const identity = el("div", "profile-identity");
+    identity.append(el("span", "profile-avatar", initials(profile.display_name)));
+    const names = el("div", "profile-names");
+    names.append(el("span", "profile-name", profile.display_name || "Signed in"));
+    names.append(el("span", "profile-mail", profile.email || ""));
+    identity.append(names);
+
+    const context = el("div", "profile-context");
+    if (org) {
+      context.append(el("span", "profile-org", org.name));
+      context.append(el("span", "profile-role is-" + org.role, roleLabel(org.role)));
+      if (org.join_code) {
+        const code = el("code", "profile-code", org.join_code);
+        code.title = "Share this code so a teammate can join";
+        context.append(code);
+      }
+    } else {
+      context.append(el("span", "profile-org is-empty", "No company yet"));
+    }
+
+    const actions = el("div", "profile-actions");
+    actions.append(button("Refresh", "button-quiet", function () { void refreshAll(); }));
+    actions.append(button("Sign out", "button-quiet", signOut));
+    bar.append(identity, context, actions);
+    return bar;
+  }
+
   function renderReminders() {
     const rem = state.reminders;
     if (!rem) return null;
@@ -1453,7 +1564,7 @@
     }
     function group(label, rows, tone) {
       if (!rows || !rows.length) return;
-      card.append(el("h4", "commit-subhead", label + " \\u00b7 " + rows.length));
+      card.append(el("h4", "commit-subhead", label + " \u00b7 " + rows.length));
       const list = el("div", "commit-list");
       rows.forEach(function (row) {
         const item = el("div", "commit-row is-" + (tone || row.status));
@@ -1487,11 +1598,8 @@
           : "What you have shared with the team."
       )
     );
-
-    const drafts = state.playbook.filter(function (entry) { return entry.status === "draft"; });
-    const approved = state.playbook.filter(function (entry) { return entry.status === "approved"; });
-    const myShared = state.myInsights.filter(function (i) { return i.visibility === "shared"; });
-
+    const drafts = (state.playbook || []).filter(function (e) { return e.status === "draft"; });
+    const approved = (state.playbook || []).filter(function (e) { return e.status === "approved"; });
     const stats = el("div", "team-stats");
     function stat(value, label, tone) {
       const box = el("div", "team-stat" + (tone ? " is-" + tone : ""));
@@ -1499,14 +1607,15 @@
       box.append(el("span", "team-stat-label", label));
       return box;
     }
-    stats.append(stat(state.members.length, state.members.length === 1 ? "member" : "members"));
-    stats.append(stat(state.sharedInsights.length, "shared insights"));
-    stats.append(stat(drafts.length, "awaiting review", drafts.length ? "attention" : null));
-    stats.append(stat(approved.length, "approved guidance"));
+    stats.append(
+      stat(state.members.length, state.members.length === 1 ? "member" : "members"),
+      stat((state.sharedInsights || []).length, "shared insights"),
+      stat(drafts.length, "awaiting review", drafts.length ? "attention" : null),
+      stat(approved.length, "approved guidance")
+    );
     card.append(stats);
-
     if (canReview() && drafts.length) {
-      const list = el("div", "team-list team-overview-list");
+      const list = el("div", "team-list");
       drafts.slice(0, 4).forEach(function (entry) {
         const row = el("div", "team-row is-draft");
         row.append(el("span", "team-row-title", entry.title));
@@ -1517,158 +1626,8 @@
         list.append(row);
       });
       card.append(list);
-      if (drafts.length > 4) {
-        card.append(el("p", "team-scope-note", (drafts.length - 4) + " more draft entries below."));
-      }
-    } else if (canReview()) {
-      card.append(el("p", "team-scope-note", "No entries are waiting for review."));
-    } else if (myShared.length) {
-      card.append(
-        el("p", "team-scope-note",
-          myShared.length + (myShared.length === 1 ? " insight is" : " insights are") + " visible to your team.")
-      );
-    } else {
-      card.append(
-        el("p", "team-scope-note", "You have not shared any insights yet. Sharing is always your choice.")
-      );
-    }
-
-    if (!state.members.length) {
-      card.append(el("p", "team-scope-note", "Select an organization to see its team."));
     }
     return card;
-  }
-
-  function activeOrg() {
-    return (state.organizations || []).find(function (o) {
-      return o.org_id === state.orgId;
-    }) || null;
-  }
-
-  function initials(text) {
-    return String(text || "?")
-      .split(/[\s@._-]+/)
-      .filter(Boolean)
-      .slice(0, 2)
-      .map(function (part) { return part[0].toUpperCase(); })
-      .join("");
-  }
-
-  // A real profile bar: who you are, which company you are acting in, and your
-  // role there. Without it the page reads as cards with no owner.
-  function renderProfileBar() {
-    const bar = el("div", "profile-bar");
-    const profile = (state.me && state.me.profile) || {};
-    const org = activeOrg();
-
-    const identity = el("div", "profile-identity");
-    identity.append(el("span", "profile-avatar", initials(profile.display_name)));
-    const names = el("div", "profile-names");
-    names.append(el("span", "profile-name", profile.display_name || "Signed in"));
-    names.append(el("span", "profile-mail", profile.email || ""));
-    identity.append(names);
-
-    const context = el("div", "profile-context");
-    if (org) {
-      context.append(el("span", "profile-org", org.name));
-      context.append(el("span", "profile-role is-" + org.role, roleLabel(org.role)));
-      if (org.join_code) {
-        const code = el("code", "profile-code", org.join_code);
-        code.title = "Share this code to invite a teammate";
-        context.append(code);
-      }
-    } else {
-      context.append(el("span", "profile-org is-empty", "No company yet"));
-    }
-
-    const actions = el("div", "profile-actions");
-    actions.append(button("Refresh", "button-quiet", function () { void refreshAll(); }));
-    actions.append(button("Sign out", "button-quiet", signOut));
-
-    bar.append(identity, context, actions);
-    return bar;
-  }
-
-  // Sections rather than one flat grid: identity, then what needs attention,
-  // then the team's material. Each block has its own heading so the page has
-  // a hierarchy instead of a single column of cards.
-  function section(title, note, cards) {
-    const wrap = el("section", "team-section");
-    const head = el("div", "team-section-head");
-    const titles = el("div", "team-section-titles");
-    titles.append(el("h2", "team-section-title", title));
-    if (note) titles.append(el("p", "team-section-note", note));
-    head.append(titles);
-    wrap.append(head);
-    const body = el("div", "team-section-body");
-    cards.forEach(function (card) { if (card) body.append(card); });
-    wrap.append(body);
-    return wrap;
-  }
-
-  // Tabs, not one long scroll: each area of the product gets its own view.
-  const TEAM_TABS = [
-    { id: "overview", label: "Overview" },
-    { id: "calls", label: "Calls" },
-    { id: "insights", label: "Insights" },
-    { id: "commitments", label: "Commitments" },
-    { id: "playbook", label: "Playbook" },
-    { id: "team", label: "Team" },
-    { id: "settings", label: "Settings" },
-  ];
-
-  function setTab(id) {
-    state.tab = id;
-    render();
-    // Commitments and reminders are fetched when their tab opens, so the
-    // counts reflect right now rather than whatever arrived at sign-in.
-    if (id === "commitments" || id === "overview") {
-      void refreshCommitments().then(function () {
-        if (state.tab === id) render();
-      });
-    }
-  }
-
-  function renderTabs() {
-    const nav = el("nav", "team-tabs");
-    nav.setAttribute("role", "tablist");
-    TEAM_TABS.forEach(function (tab) {
-      const active = (state.tab || "overview") === tab.id;
-      const button = el("button", "team-tab" + (active ? " is-active" : ""), tab.label);
-      button.type = "button";
-      button.setAttribute("role", "tab");
-      button.setAttribute("aria-selected", active ? "true" : "false");
-      if (tab.id === "playbook") {
-        const drafts = (state.playbook || []).filter(function (e) { return e.status === "draft"; }).length;
-        if (drafts) button.append(el("span", "team-tab-badge", String(drafts)));
-      }
-      button.addEventListener("click", function () { setTab(tab.id); });
-      nav.append(button);
-    });
-    return nav;
-  }
-
-  function renderTabBody() {
-    const tab = state.tab || "overview";
-    const wrap = el("div", "team-panel");
-    wrap.setAttribute("role", "tabpanel");
-    if (tab === "overview") {
-      wrap.append(renderReminders(), renderOverview(), renderOrgPicker());
-    } else if (tab === "calls") {
-      wrap.append(renderCallsTab(), renderConversations());
-    } else if (tab === "insights") {
-      wrap.append(renderInsights());
-    } else if (tab === "commitments") {
-      wrap.append(renderCommitmentsTab());
-    } else if (tab === "playbook") {
-      wrap.append(renderPlaybook());
-    } else if (tab === "team") {
-      const detail = renderMemberDetail();
-      wrap.append(detail || renderTeam());
-    } else {
-      wrap.append(renderOrgPicker(), renderTeam());
-    }
-    return wrap;
   }
 
   function renderSignedIn() {

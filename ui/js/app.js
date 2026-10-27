@@ -97,7 +97,7 @@
     captureLive: "capture-live",
     captureLiveText: "capture-live-text",
     captureSegments: "capture-segments",
-    interpretBlock: "interpret-block",
+
     interpretTarget: "interpret-target",
     interpretDevice: "interpret-device",
     interpretSpeak: "interpret-speak",
@@ -211,8 +211,16 @@
     viewPlaybook: "view-playbook",
     viewSignals: "view-signals",
     viewTeam: "view-team",
+    viewInterpret: "view-interpret",
     signalsTitle: "signals-title",
     teamTitle: "team-title",
+    interpretTitle: "interpret-title",
+    interpretStart: "interpret-start",
+    interpretStop: "interpret-stop",
+    interpretStatus: "interpret-status",
+    interpretAlert: "interpret-alert",
+    interpretMic: "interpret-mic",
+    interpretSystem: "interpret-system",
     modeChip: "mode-chip",
   };
 
@@ -225,6 +233,7 @@
     coach: ui.viewCoach,
     playbook: ui.viewPlaybook,
     signals: ui.viewSignals,
+    interpret: ui.viewInterpret,
     team: ui.viewTeam,
   };
 
@@ -233,6 +242,7 @@
     coach: ui.coachTitle,
     playbook: ui.playbookTitle,
     signals: ui.signalsTitle,
+    interpret: ui.interpretTitle,
     team: ui.teamTitle,
   };
 
@@ -441,6 +451,7 @@
     }
     if (view === "signals") void refreshSignals();
     if (view === "team" && window.ClearCommitTeamView) window.ClearCommitTeamView.refresh();
+    if (view === "interpret") void initInterpretView();
     if (opts.focus !== false) {
       const title = VIEW_TITLES[view];
       if (title) title.focus({ preventScroll: true });
@@ -2036,44 +2047,104 @@
       select.value = previous;
     }
   }
-  async function initInterpretation() {
-    if (!ui.interpretBlock) return;
+  // Dedicated interpretation view: capture both sides, translate each turn,
+  // and optionally voice the user's replies. Independent of transcript import.
+  const interp = { timer: null, active: false };
+
+  async function initInterpretView() {
+    if (!ui.interpretStart) return;
     try {
       const status = await bridge.call("interpret_status");
       if (!status.translation.configured) {
-        ui.interpretBlock.hidden = true;
-        return;
+        ui.interpretAlert.hidden = false;
+        ui.interpretAlert.textContent =
+          "Translation needs an API key on this computer. Transcription still works without it.";
       }
-      ui.interpretBlock.hidden = false;
-      clear(ui.interpretTarget);
-      (status.languages || []).forEach(function (lang) {
-        if (lang.code === "en") return;
-        const opt = el("option", null, lang.name);
-        opt.value = lang.code;
-        ui.interpretTarget.append(opt);
-      });
+      const devices = await bridge.call("audio_devices");
+      fillDeviceList(ui.interpretMic, (devices.microphones || []).map(function (d) {
+        return { index: d.index, name: (d.peak >= 300 ? d.name : d.name + " (no signal)") };
+      }), "No microphone");
+      if (devices.preferred_microphone != null) {
+        ui.interpretMic.value = String(devices.preferred_microphone);
+      }
+      fillDeviceList(ui.interpretSystem, devices.outputs, "No call audio device");
       fillDeviceList(ui.interpretDevice, status.outputs, "No output device");
-      const cable = (status.outputs || []).find(function (d) {
-        return /cable|virtual|vb-audio/i.test(d.name);
-      });
+      const cable = (status.outputs || []).find(function (d) { return /cable/i.test(d.name); });
       if (cable) ui.interpretDevice.value = String(cable.index);
-      if (!status.speech.configured) {
-        ui.interpretSpeak.checked = false;
-        ui.interpretSpeak.disabled = true;
-        ui.interpretNote.textContent =
-          "Translation is available. Voice playback needs ELEVENLABS_API_KEY or GROQ_API_KEY.";
+      if (!ui.interpretTarget.options.length) {
+        (status.languages || []).forEach(function (lang) {
+          if (lang.code === "en") return;
+          const opt = el("option", null, lang.name);
+          opt.value = lang.code;
+          ui.interpretTarget.append(opt);
+        });
       }
     } catch (error) {
-      ui.interpretBlock.hidden = true;
+      showGlobalAlert(describeError(error), "warn");
+    }
+
+    ui.interpretStart.addEventListener("click", function () { void startInterpretation(); });
+    ui.interpretStop.addEventListener("click", function () { void stopInterpretation(); });
+  }
+
+  async function startInterpretation() {
+    ui.interpretStart.disabled = true;
+    try {
+      const payload = {
+        source: "microphone",
+        include_system: true,
+        device: ui.interpretMic.value === "" ? null : Number(ui.interpretMic.value),
+        system_device: ui.interpretSystem.value === "" ? null : Number(ui.interpretSystem.value),
+      };
+      await bridge.call("audio_start", payload);
+      interp.active = true;
+      ui.interpretStop.disabled = false;
+      ui.interpretStatus.textContent = "Listening";
+      ui.interpretStatus.className = "status-chip is-live";
+      ui.interpretAlert.hidden = true;
+      clear(ui.interpretCaller);
+      clear(ui.interpretMine);
+      ui.interpretCallerEmpty.hidden = false;
+      ui.interpretMineEmpty.hidden = false;
+      interp.timer = window.setInterval(pollInterpretation, 5000);
+    } catch (error) {
+      notifyError(error, "Could not start listening");
+      ui.interpretStart.disabled = false;
+      ui.interpretStatus.textContent = "Failed";
     }
   }
 
-  // The caller speaks their own language; we read it in ours. Translating
-  // their turns is what makes a foreign-language call understandable, so that
-  // is the primary direction. The user's own turns are translated too, which
-  // is the text the caller would need if it were spoken back.
+  async function pollInterpretation() {
+    if (!interp.active) return;
+    try {
+      const result = await bridge.call("audio_poll", { provider: "groq" });
+      (result.turns || []).forEach(function (turn) {
+        void interpretTurn(turn.text, turn.speaker === "customer");
+      });
+    } catch (error) {
+      ui.interpretAlert.hidden = false;
+      ui.interpretAlert.textContent =
+        "Transcription problem: " + describeError(error) + " Listening continues.";
+    }
+  }
+
+  async function stopInterpretation() {
+    if (interp.timer) {
+      window.clearInterval(interp.timer);
+      interp.timer = null;
+    }
+    try {
+      await bridge.call("audio_stop");
+    } catch (error) {
+      /* stopping must always leave the UI usable */
+    }
+    interp.active = false;
+    ui.interpretStart.disabled = false;
+    ui.interpretStop.disabled = true;
+    ui.interpretStatus.textContent = "Idle";
+    ui.interpretStatus.className = "status-chip status-chip-quiet";
+  }
   async function interpretTurn(text, fromCaller) {
-    if (!ui.interpretBlock || ui.interpretBlock.hidden) return;
     if (!text || !text.trim()) return;
     const target = ui.interpretTarget.value;
     if (!target) return;
@@ -2577,7 +2648,6 @@
     initOnboarding();
     applyWebMode();
     void initCapture();
-    void initInterpretation();
     if (ui.captureSource) {
       ui.captureSource.addEventListener("change", function () {
         void refreshCaptureDevices();

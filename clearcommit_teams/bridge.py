@@ -24,7 +24,12 @@ from .coaching import (
     CoachingService,
 )
 from .repository import Repository
-from .errors import BridgeError, ValidationError, error_payload
+from .errors import (
+    BridgeError,
+    ProviderNotConfiguredError,
+    ValidationError,
+    error_payload,
+)
 from .models import (
     evidence_ref,
     parse_refs,
@@ -559,6 +564,17 @@ class Bridge:
     def audio_poll(self, payload: Any = None) -> dict:
         return self._execute("audio_poll", self._audio_poll, payload)
 
+    def _input_level(self) -> float | None:
+        """Peak level seen on the microphone since the last poll (0..1)."""
+        capture = getattr(self._capture, "_capture", None)
+        if capture is None:
+            return None
+        value = getattr(capture, "last_rms", None)
+        try:
+            return round(float(value), 4) if value is not None else None
+        except (TypeError, ValueError):
+            return None
+
     def _audio_poll(self, payload: Mapping[str, Any]) -> dict:
         """Transcribe whatever accumulated since the last poll.
 
@@ -569,7 +585,7 @@ class Bridge:
         """
         if self._capture is None:
             return {"active": False, "segments": 0, "text": "", "turns": []}
-        from .audio.transcribe import get_transcriber
+        from .audio.transcribe import TranscriptionError, get_transcriber
 
         provider = str(payload.get("provider") or "groq").strip().lower()
         pairs = self._capture.drain_both()
@@ -579,16 +595,35 @@ class Bridge:
                 "segments": 0,
                 "text": "",
                 "turns": [],
+                # Expose the live input level so the UI can tell "you were
+                # silent" apart from "the microphone is delivering nothing".
+                "input_level": self._input_level(),
             }
 
-        transcriber = get_transcriber(provider)
+        # The transcriber is constructed before any audio is consumed so a
+        # missing/invalid key reports why, instead of the poll failing later
+        # with an opaque internal error.
+        try:
+            transcriber = get_transcriber(provider)
+        except TranscriptionError as exc:
+            raise ProviderNotConfiguredError(str(exc), detail={"provider": provider}) from exc
+
         texts: list[str] = []
         turns: list[dict] = []
+        failures: list[str] = []
         for source, wav in pairs:
-            if hasattr(transcriber, "transcribe_turns"):
-                segments = transcriber.transcribe_turns(wav)
-            else:
-                segments = [transcriber.transcribe(wav)]
+            try:
+                if hasattr(transcriber, "transcribe_turns"):
+                    segments = transcriber.transcribe_turns(wav)
+                else:
+                    segments = [transcriber.transcribe(wav)]
+            except TranscriptionError as exc:
+                if exc.code in ("empty_transcript", "empty_audio"):
+                    continue
+                # Keep listening: one failed chunk must not stop the session,
+                # but the reason has to reach the user.
+                failures.append(str(exc))
+                continue
             for segment in segments:
                 if not segment.text:
                     continue
@@ -607,6 +642,8 @@ class Bridge:
             "text": " ".join(texts).strip(),
             "turns": turns,
             "provider": provider,
+            "input_level": self._input_level(),
+            "errors": failures,
         }
 
     def audio_stop(self, payload: Any = None) -> dict:

@@ -65,15 +65,45 @@ def _launch_webview(context, debug: bool) -> int:
     return 0
 
 
-def _load_local_env() -> None:
-    """Load .env from the project root so provider keys reach the desktop app."""
+def _env_candidates() -> list[Path]:
+    """Every place a local .env may legitimately live, nearest first.
+
+    Inside a PyInstaller bundle ``__file__`` points into the extracted
+    ``_internal`` folder, so ``parent.parent`` is NOT the checkout — it is the
+    dist folder next to the exe. That silently stranded the API keys and left
+    live capture transcribing nothing. Search the exe/folder the user actually
+    launched (and its ancestors) before falling back to the source layout.
+    """
+    roots: list[Path] = []
+    if getattr(sys, "frozen", False):
+        exe = Path(sys.executable).resolve()
+        roots.extend([exe.parent, *exe.parent.parents])
+        meipass = getattr(sys, "_MEIPASS", None)
+        if meipass:
+            roots.extend([Path(meipass).resolve(), *Path(meipass).resolve().parents])
+    else:
+        roots.append(PROJECT_ROOT.resolve())
+
+    candidates: list[Path] = []
+    for root in roots:
+        path = root / ".env"
+        if path not in candidates:
+            candidates.append(path)
+    return candidates
+
+
+def _load_local_env() -> list[Path]:
+    """Load the first .env that exists so provider keys reach the desktop app."""
     try:
         from dotenv import load_dotenv
     except ImportError:
-        return
-    env_path = Path(__file__).resolve().parent.parent / ".env"
-    if env_path.exists():
-        load_dotenv(env_path, override=False)
+        return []
+    loaded: list[Path] = []
+    for env_path in _env_candidates():
+        if env_path.is_file() and load_dotenv(env_path, override=False):
+            loaded.append(env_path)
+            break
+    return loaded
 
 
 def main(argv: list[str] | None = None) -> int:

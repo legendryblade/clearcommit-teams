@@ -2249,12 +2249,27 @@
           ui.captureSegments.append(item);
         });
         ui.captureLiveText.textContent =
-          "Recording — " + capture.buffer.length + " segment(s) so far.";
+          "Recording - " + capture.buffer.length + " segment(s) so far.";
       } else if (result.text) {
         capture.buffer.push({ speaker: null, text: result.text });
         ui.captureSegments.append(el("li", "capture-segment", result.text));
         ui.captureLiveText.textContent =
-          "Recording — " + capture.buffer.length + " segment(s) so far.";
+          "Recording - " + capture.buffer.length + " segment(s) so far.";
+      } else if ((result.errors || []).length) {
+        // Never look like it is working when the provider is refusing.
+        ui.captureLiveText.textContent = "Not transcribing: " + result.errors.join(" ");
+      } else {
+        // Say whether audio is actually arriving, so a dead microphone is
+        // visible instead of an endless silent "0 segments".
+        const level = typeof result.input_level === "number" ? result.input_level : null;
+        if (level !== null && level < 0.002) {
+          ui.captureLiveText.textContent =
+            "Recording - no sound reaching the microphone. Check Windows input " +
+            "device, mute, and that another app is not holding the mic.";
+        } else {
+          ui.captureLiveText.textContent =
+            "Recording - listening (input level " + (level === null ? "unknown" : level.toFixed(3)) + ").";
+        }
       }
     } catch (error) {
       // A provider failure must be visible, and must not silently lose audio.

@@ -173,15 +173,23 @@ class MicCapture:
     def _flush(self) -> None:
         if self._buf:
             audio = np.concatenate(self._buf)
+            self._buf = []
             if self.noise_cancel:
                 audio = self._spectral_gate(audio)
+            # Drop sub-150 ms crumbs: Whisper reliably hallucinates on them.
+            if len(audio) < int(0.15 * self.rate):
+                self._speaking = False
+                self._silence_samples = 0
+                return
             self._utt_q.put(self._to_wav(audio))
-        self._buf = []
         self._speaking = False
         self._silence_samples = 0
 
     @staticmethod
     def _to_wav(audio_int16: np.ndarray) -> bytes:
+        # Length is derived from the samples themselves (the pipeline always
+        # works at ``rate`` after resampling) so a resampled chunk can never be
+        # written with the wrong header.
         buf = io.BytesIO()
         with wave.open(buf, "wb") as w:
             w.setnchannels(1)
@@ -199,12 +207,20 @@ class MicCapture:
         # successfully but never deliver callback audio. A short probe decides
         # which path to use: callbacks where they work, otherwise a worker
         # thread doing blocking reads, which works on every device seen so far.
-        dev_rate = self.rate
+        dev_rate = None
         if self.device is not None:
             try:
-                dev_rate = int(sd.query_devices(self.device).get("default_samplerate", self.rate))
+                dev_rate = int(sd.query_devices(self.device).get("default_samplerate") or 0)
             except Exception:  # noqa: BLE001
-                dev_rate = self.rate
+                dev_rate = None
+        if not dev_rate:
+            try:
+                default_in = sd.default.device[0]
+                dev_rate = int(sd.query_devices(default_in).get("default_samplerate") or 0)
+            except Exception:  # noqa: BLE001
+                dev_rate = None
+        if not dev_rate or dev_rate <= 0:
+            dev_rate = self.rate
         self._dev_rate = dev_rate
 
         if self._callbacks_work(sd, dev_rate):
@@ -219,6 +235,10 @@ class MicCapture:
             self._stream.start()
             return self
 
+        # The reader thread resamples from _dev_rate, so it must be set before
+        # the thread starts — otherwise device-native audio (usually 44.1/48
+        # kHz) is fed straight to a 16 kHz WAV and every utterance is pitched
+        # and unintelligible, which reads as "the mic hears nothing".
         self._reader = sd.RawInputStream(
             samplerate=dev_rate,
             channels=1,
@@ -267,10 +287,15 @@ class MicCapture:
             except Exception:
                 break
             samples = np.frombuffer(data, dtype=np.int16)
+            if self._dev_rate and self._dev_rate != self.rate:
+                samples = self._resample(samples, self._dev_rate, self.rate)
+            if not samples.size:
+                continue
             rms = float(np.sqrt(np.mean(samples.astype(np.float32) ** 2)) / 32768.0)
             self.last_rms = rms
             self.cb_count += 1
             self._process(samples, rms)
+
     def stop(self) -> None:
         self._stop = True
         if self._stream is not None:
@@ -279,6 +304,18 @@ class MicCapture:
                 self._stream.close()
             finally:
                 self._stream = None
+        if self._reader is not None:
+            try:
+                self._reader.stop()
+                self._reader.close()
+            finally:
+                self._reader = None
+        thread = self._thread
+        if thread is not None and thread.is_alive():
+            thread.join(timeout=1.0)
+        self._thread = None
+        # Flush a partial utterance so the last thing said is not lost.
+        self._flush()
 
     def utterances(self) -> Iterator[bytes]:
         """Yield completed WAV utterances until ``stop()`` is called."""

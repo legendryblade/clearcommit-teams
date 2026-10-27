@@ -140,26 +140,45 @@ def probe_microphones(seconds: float = 0.35) -> list[tuple[int, str, int]]:
 
 
 def preferred_microphone(threshold: int = 300) -> int | None:
-    """The best working physical microphone.
+    """Best working microphone, or None to use the Windows default.
 
-    Virtual devices (VB-Audio, sound mapper, stereo mix) are ranked last: they
-    are useful for routing but are not what a person expects to speak into.
+    Ranking is by host API first. WDM-KS endpoints answer a one-shot recording
+    but cannot stream, so choosing one by peak alone silently breaks capture.
+    MME/WASAPI/DirectSound can stream, so those win; among them the loudest
+    physical device is preferred over virtual cables.
     """
-    measured = [m for m in probe_microphones() if m[2] >= threshold]
+    _require()
+    import sounddevice as sd
+
+    measured = probe_microphones()
     if not measured:
         return None
 
-    def rank(entry: tuple[int, str, int]) -> tuple[int, int]:
-        name = entry[1].lower()
-        virtual = any(
-            key in name
-            for key in ("vb-audio", "cable", "sound mapper", "primary sound", "stereo mix", "point")
-        )
-        return (1 if virtual else 0, -entry[2])
+    def host_api(index: int) -> str:
+        try:
+            return str(sd.query_hostapis(sd.query_devices(index)["hostapi"])["name"]).lower()
+        except Exception:
+            return ""
 
-    return sorted(measured, key=rank)[0][0]
+    def rank(entry: tuple[int, str, int]) -> tuple[int, int, int]:
+        index, name, peak = entry
+        api = host_api(index)
+        # 0 = streamable physical, 1 = streamable virtual, 2 = WDM-KS, 3 = silent
+        if "wdm-ks" in api:
+            family = 2
+        elif any(k in name.lower() for k in ("vb-audio", "cable", "sound mapper", "primary sound", "stereo mix", "point")):
+            family = 1
+        else:
+            family = 0
+        return (family, 0 if peak >= threshold else 1, -peak)
 
-
+    ranked = sorted(measured, key=rank)
+    best = ranked[0]
+    if best[2] < threshold:
+        return None
+    if rank(best)[0] >= 2:
+        return None
+    return best[0]
 def list_output_devices() -> list[tuple[int, str, int, int]]:
     _require()
     from .mic import list_audio_devices as _list

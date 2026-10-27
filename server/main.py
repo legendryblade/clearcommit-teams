@@ -1,4 +1,4 @@
-﻿"""FastAPI application factory for the ClearCommit Teams backend."""
+"""FastAPI application factory for the ClearCommit Teams backend."""
 
 from __future__ import annotations
 
@@ -133,13 +133,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         commitments,
         conversations,
         events,
+        executions,
         insights,
         messaging,
         orgs,
         playbook,
     )
 
-    for router in (auth, orgs, conversations, insights, playbook, messaging, events, commitments):
+    for router in (auth, orgs, conversations, insights, playbook, messaging, events, commitments, executions):
         app.include_router(router.router)
 
     @app.get("/health")

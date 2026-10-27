@@ -216,3 +216,88 @@ def audit_brief(event: AuditEvent) -> dict:
         "detail": detail,
         "created_at": _iso(event.created_at),
     }
+
+
+def _loads(raw: str | None):
+    if not raw:
+        return None
+    try:
+        return json.loads(raw)
+    except ValueError:
+        return None
+
+
+def execution_brief(execution) -> dict:
+    return {
+        "execution_id": execution.id,
+        "org_id": execution.org_id,
+        "goal": execution.goal,
+        "status": execution.status,
+        "outcome_detail": execution.outcome_detail,
+        "cancelled_by": execution.cancelled_by,
+        "created_by": execution.created_by,
+        "created_at": _iso(execution.created_at),
+        "updated_at": _iso(execution.updated_at),
+        "closed_at": _iso(execution.closed_at),
+    }
+
+
+def step_brief(step) -> dict:
+    return {
+        "step_id": step.id,
+        "execution_id": step.execution_id,
+        "seq": step.seq,
+        "title": step.title,
+        "kind": step.kind,
+        "status": step.status,
+        "assignee_id": step.assignee_id,
+        "postcondition": step.postcondition,
+        "detail": _loads(step.detail_json),
+        "created_at": _iso(step.created_at),
+        "updated_at": _iso(step.updated_at),
+    }
+
+
+def approval_brief(approval) -> dict:
+    return {
+        "approval_id": approval.id,
+        "execution_id": approval.execution_id,
+        "step_id": approval.step_id,
+        "requested_by": approval.requested_by,
+        "summary": approval.summary,
+        "action_digest": approval.action_digest,
+        "risk": approval.risk,
+        "status": approval.status,
+        "decided_by": approval.decided_by,
+        "decided_at": _iso(approval.decided_at),
+        "decision_note": approval.decision_note,
+        "expires_at": _iso(approval.expires_at),
+        "created_at": _iso(approval.created_at),
+    }
+
+
+def verification_brief(run) -> dict:
+    return {
+        "verification_id": run.id,
+        "execution_id": run.execution_id,
+        "step_id": run.step_id,
+        "postcondition": run.postcondition,
+        "result": run.result,
+        "source": run.source,
+        "evidence": _loads(run.evidence_json),
+        "checked_by": run.checked_by,
+        "created_at": _iso(run.created_at),
+    }
+
+
+def execution_event_brief(event) -> dict:
+    return {
+        "event_id": event.id,
+        "execution_id": event.execution_id,
+        "actor_id": event.actor_id,
+        "action": event.action,
+        "from_status": event.from_status,
+        "to_status": event.to_status,
+        "detail": _loads(event.detail_json),
+        "created_at": _iso(event.created_at),
+    }

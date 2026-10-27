@@ -1,141 +1,142 @@
 # ClearCommit Teams — project overview
 
-A working, tested reference for a **multi-tenant team application with a desktop
-client**: real accounts, organizations, roles, privacy boundaries, and a
-reviewed knowledge loop.
+A working, tested reference for a **multi-tenant team app with a desktop
+client**: real accounts, orgs, roles, privacy boundaries, and a reviewed
+knowledge loop. Written so the next project can copy the architecture instead
+of reinventing it.
 
-Written so the next project can copy the architecture rather than reinvent it.
+## Product
 
-## The product in one paragraph
-
-A sales conversation is captured or imported. The app turns it into
-evidence-linked observations, each citing the exact line it came from. The
-author chooses to share an observation; a manager reviews it; approved guidance
-becomes team playbook. Promises made in the conversation become tracked
-commitments with an owner, a due date, and a history.
+A sales conversation is captured or imported and turned into evidence-linked
+observations, each citing the exact line it came from. The author may share an
+observation; a manager reviews it; approved guidance becomes team playbook.
+Promises made become tracked commitments with an owner, due date, and history.
 
 ## Two surfaces, one backend
 
 ```
-DESKTOP (Windows)                     WEB (browser)
-python + pywebview                    same HTML/CSS/JS
-local SQLite workspace                no local state
-audio capture, coaching,              team data only
-interpretation, playbook
-        │                                     │
+DESKTOP (pywebview)                  WEB (browser)
+local SQLite, no account needed      no local state, team data only
+audio, coaching, interpretation
         └──────────────┬──────────────────────┘
                        ▼
-              FastAPI  +  Supabase
+              FastAPI + Supabase
         accounts · orgs · roles · RLS
 ```
 
-The surfaces do **not** talk to each other. They share identity and a database.
-A desktop conversation reaches the team only when the user presses
-*Save to cloud*.
+The surfaces never talk to each other. They share identity and a database. A
+desktop conversation reaches the team only on *Save to cloud*.
 
 ## Layers
 
 | Layer | Responsibility | Where |
 | --- | --- | --- |
-| Identity | Sign-up, sign-in, tokens, verification | Supabase Auth, `server/security.py` |
-| Tenancy | Organizations, memberships, roles, invitations, join codes | `server/routers/orgs.py`, `server/join_codes.py` |
-| Authorization | Membership resolution on every route, 404 across tenants | `server/dependencies.py` |
-| Privacy | Private until shared; separate personal workspace | `server/personal.py`, `conversations.visibility` |
-| Work records | Conversations, utterances, insights, playbook | `server/models.py` |
-| Commitments | Promises with owner, due date, status, history, reminders | `server/routers/commitments.py` |
-| Real-time | Authenticated WebSocket, org-scoped, minimal payloads | `server/events.py` |
+| Identity | Sign-up, tokens, provisioning | Supabase Auth, `security.py` |
+| Tenancy | Orgs, memberships, roles, invitations, join codes | `routers/orgs.py`, `join_codes.py` |
+| Authorization | Membership check per route, 404 across tenants | `dependencies.py` |
+| Privacy | Private until shared; personal workspace | `personal.py` |
+| Work records | Conversations, utterances, insights, playbook | `models.py` |
+| Commitments | Owner, due date, status, history, reminders | `routers/commitments.py` |
+| Real-time | Authenticated, org-scoped WebSocket | `events.py` |
 | Local workspace | Per-account SQLite, offline-first | `clearcommit_teams/` |
-| Audio | Capture, transcription, interpretation | `clearcommit_teams/audio/` |
+| Audio | Capture, transcription, interpretation | `audio/` |
 | Client | One UI for both surfaces, role-aware | `ui/` |
+| Execution control | States, approvals, verification, timeline | `routers/executions.py`, `execution_state.py` |
 
-## The five design decisions worth copying
+## Five decisions worth copying
 
-### 1. Cross-tenant access returns 404, not 403
-A caller outside an organization gets `not_found`, so the API never confirms
-that a record exists. Role violations *inside* your own org get 403. This is
-tested on every route.
-
-### 2. The token is the only identity
-No endpoint trusts a client-supplied `user_id`, `role`, `owner_id`, or
-`org_id`. Supabase tokens are verified server-side (ES256 via JWKS or HS256
-secret). `/api/me` provisions a local profile row on first sighting.
-
-### 3. A code is not a permission
-A join code identifies which organization. The role comes from a pending
-invitation matched to the **verified email**, otherwise `sales_rep` — the least
-privileged role. A leaked code cannot make someone a manager.
-
-### 4. Nothing becomes "confirmed" by itself
-A commitment is created `awaiting_confirmation`; it opens only when a person
-confirms the owner and the date. An insight is `private` until its author
-shares it. A model may propose; a human accepts.
-
-### 5. Sync is an explicit action
-Local data stays local. `Save to cloud` posts the conversation into the
-company and shares it. There is no background upload and no raw audio transfer.
+1. **Cross-tenant is 404, not 403.** The API never confirms a record exists
+   outside your org. Role violations *inside* your org get 403.
+2. **The token is the only identity.** No route trusts a client-supplied
+   `user_id`, `role`, or `org_id`.
+3. **A code is not a permission.** A join code picks the org; the role comes
+   from a pending invitation matched to the verified email, else `sales_rep`. A
+   leaked code cannot make someone a manager.
+4. **Nothing confirms itself.** Commitments start `awaiting_confirmation`;
+   insights start `private`. A model proposes, a human accepts.
+5. **Sync is explicit.** No background upload, no raw audio transfer.
 
 ## Data model
 
 ```
 profiles ──< memberships >── organizations
-                                  │
-      ┌───────────────┬───────────┼──────────────┬─────────────┐
- conversations   coaching_insights  playbook_entries  approved_messaging
-      │                 │                 │
- utterances        evidence_json    insight_id (set null)
-      │
- commitments ──< commitment_events
- invitations      audit_events · idempotency_records
+                                 │
+     ┌───────────────┬───────────┼──────────────┬─────────────┐
+conversations  coaching_insights  playbook_entries  approved_messaging
+     │                │                 │
+utterances       evidence_json    insight_id (set null)
+     │
+commitments ──< commitment_events
+invitations      audit_events · idempotency_records
 ```
 
-- Every organization-owned row carries `org_id`; FKs cascade from the org.
-- `utterances` inherit conversation access through an existence subquery in RLS.
-- `playbook_entries.insight_id` is `ON DELETE SET NULL`, so approved guidance
-  survives insight deletion.
-- `commitment_events` is append-only: the life of a promise can be read back.
+Every org-owned row carries `org_id` and cascades from the org. `utterances`
+inherit access via an existence subquery in RLS. `playbook_entries.insight_id`
+is `ON DELETE SET NULL`, so approved guidance outlives the insight.
+`commitment_events` is append-only.
 
 ## Security posture
 
 | Control | Implementation |
 | --- | --- |
-| Token verification | JWKS (ES256) or shared secret; expiry checked |
-| Tenant isolation | API membership checks + Postgres RLS policies |
+| Token verification | JWKS (ES256) or shared secret, expiry checked |
+| Tenant isolation | API membership checks + Postgres RLS |
 | Nested access | Utterance policies follow the parent conversation |
-| Client secrets | None. Service-role key never used; anon key only |
-| Password storage | scrypt (demo mode only) |
-| Sensitive writes | Audited; important ones support `Idempotency-Key` |
+| Client secrets | None; anon key only, service-role never used |
+| Passwords | scrypt (demo mode only) |
+| Writes | Audited; important ones accept `Idempotency-Key` |
 | Rate limiting | Per user and per IP |
 | Logging | Structured, request ids, no transcript content |
 
 ## Testing
 
-```
-pytest          190 tests
-node --test      12 tests (bridge client)
-```
+`pytest` 275 · `node --test` 12 (bridge client). The backend suite runs against
+a real FastAPI app and a real database — SQLite by default, PostgreSQL when
+configured. No service-layer mocks. Headless Chrome over CDP covers the
+two-client UI flow.
 
-The backend suite runs against a real FastAPI app and a real database, over
-SQLite by default and over PostgreSQL when configured. No service-layer mocks.
-Browser automation (headless Chrome over CDP) covers the two-client UI flow.
+## Execution control plane
+
+Executions turn a goal into work that ends in a verified outcome rather than an
+assertion. `server/execution_state.py` is a closed state machine; the API is the
+only thing that moves a run and it refuses illegal transitions.
+
+- **States** — `running`, `waiting_approval`, `blocked`, `verifying`, and the
+  five distinct endings `succeeded`, `partially_verified`, `failed`, `unknown`,
+  `cancelled`. None collapse into a generic "done".
+- **Verification is the only path to an outcome.** A run cannot be advanced
+  straight to `succeeded`. The result is derived from recorded checks against
+  named postconditions; one failed check makes the outcome `failed` even after
+  passes. A later check supersedes an earlier one about the same postcondition,
+  and nothing is concluded until every expected postcondition has a result.
+- **Approvals are bound to one action.** `action_digest` hashes the action,
+  target and parameters. The reviewer must echo the digest they are deciding on;
+  a changed action is refused. Approvals expire, are single-use, and cannot be
+  self-granted.
+- **Cancellation is not rollback.** The response says so explicitly and reports
+  `rollback_performed: false`.
+
+This is the same evidence-over-assertion rule the rest of the product follows,
+applied to execution rather than conversation. Decision records live in
+[`engineering/DECISIONS.md`](engineering/DECISIONS.md).
 
 ## Known limitations
 
-1. Live capture is fixed and streams on the default device, but transcription
-   quality on this hardware is not fully characterised.
-2. Interpretation is one-directional per turn: their speech is shown to you as
-   text; your speech is translated and optionally voiced.
+1. Live capture streams on the default device; quality is not fully
+   characterised on this hardware.
+2. Interpretation is one-directional per turn.
 3. No email delivery, CRM integration, or join-code rotation.
 4. Rate limiting is per-process.
 5. No performance scoring, by design — the data cannot support it.
+6. The execution control plane has no connector behind it yet: verification
+   checks are recorded by an authenticated caller, not fetched by the platform.
+   `0006_execution_control.sql` has not been executed against hosted Postgres.
+7. Workflow state is persisted, but there is no durable scheduler; a restart
+   preserves history and never re-runs a step, it simply does not resume one.
 
-## Stack and versions
+## Stack
 
 Python 3.11+ · FastAPI 0.162 · SQLAlchemy 2.1 · pywebview 6.2.1 · Supabase
-(Auth + Postgres) · vanilla HTML/CSS/JS · PyInstaller 6.22 · Vercel · Render.
+Auth + Postgres · vanilla HTML/CSS/JS · PyInstaller · Vercel · Render.
 
-## Where to read next
-
-- [`docs/TEMPLATE-GUIDE.md`](TEMPLATE-GUIDE.md) — how to fork this for a new product
-- [`docs/cloud-architecture.md`](cloud-architecture.md) — deployment boundary
-- [`docs/api.md`](api.md) — endpoints
-- [`docs/deployment.md`](deployment.md) — setup and hosting
+See also: [`TEMPLATE-GUIDE.md`](TEMPLATE-GUIDE.md) · [`cloud-architecture.md`](cloud-architecture.md) · [`api.md`](api.md) · [`deployment.md`](deployment.md)

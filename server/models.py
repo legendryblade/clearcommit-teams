@@ -276,3 +276,178 @@ class CommitmentEvent(Base):
     to_status: Mapped[str | None] = mapped_column(String(24), nullable=True)
     detail_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class Execution(Base):
+    """One run of controlled work: a goal becoming verified action.
+
+    Status is a closed set validated by ``execution_state``. ``Verifying`` is a
+    distinct state because between "the tool returned" and "the business result
+    was confirmed" there is a real interval where nobody knows the outcome.
+    """
+
+    __tablename__ = "executions"
+    __table_args__ = (
+        Index("ix_executions_org_status", "org_id", "status"),
+        Index("ix_executions_org_created", "org_id", "created_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    org_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("organizations.id", ondelete="CASCADE")
+    )
+    # The goal in the requester's words. Never rewritten by the system.
+    goal: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(24), default="running")
+    created_by: Mapped[str] = mapped_column(String(36), ForeignKey("profiles.id"))
+    # Set once verification has produced a verdict; the reason it is what it is.
+    outcome_detail: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Whether cancellation has stopped future work. Never implies rollback.
+    cancelled_by: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("profiles.id"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+    closed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+
+class ExecutionStep(Base):
+    """A unit of work inside an execution, with its own evidence trail.
+
+    ``postcondition`` is what must be true afterwards. A step may not be marked
+    succeeded unless a verification run checked that postcondition and passed.
+    """
+
+    __tablename__ = "execution_steps"
+    __table_args__ = (
+        UniqueConstraint("execution_id", "seq", name="uq_step_execution_seq"),
+        Index("ix_steps_execution", "execution_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    execution_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("executions.id", ondelete="CASCADE")
+    )
+    org_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("organizations.id", ondelete="CASCADE")
+    )
+    seq: Mapped[int] = mapped_column(Integer)
+    title: Mapped[str] = mapped_column(String(300))
+    # read | write | notify | approve. A write requires an approval when the
+    # action is classified as protected.
+    kind: Mapped[str] = mapped_column(String(20), default="read")
+    status: Mapped[str] = mapped_column(String(24), default="pending")
+    # Human or agent identity that performed the step, once performed.
+    assignee_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("profiles.id"), nullable=True
+    )
+    # What must be observably true in the business system afterwards.
+    postcondition: Mapped[str | None] = mapped_column(Text, nullable=True)
+    detail_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+
+
+class Approval(Base):
+    """An authorisation bound to one exact action.
+
+    ``action_digest`` is a hash of the action's identity, target and parameters.
+    A decision is valid only for that digest. A materially different action
+    produces a different digest and therefore cannot reuse this approval.
+    """
+
+    __tablename__ = "approvals"
+    __table_args__ = (
+        Index("ix_approvals_org_status", "org_id", "status"),
+        Index("ix_approvals_execution", "execution_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    org_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("organizations.id", ondelete="CASCADE")
+    )
+    execution_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("executions.id", ondelete="CASCADE")
+    )
+    step_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("execution_steps.id", ondelete="CASCADE"), nullable=True
+    )
+    requested_by: Mapped[str] = mapped_column(String(36), ForeignKey("profiles.id"))
+    # Human-readable statement of the exact action being authorised.
+    summary: Mapped[str] = mapped_column(Text)
+    # sha256 over canonical {action, target, params}. Immutable after creation.
+    action_digest: Mapped[str] = mapped_column(String(64))
+    risk: Mapped[str] = mapped_column(String(20), default="medium")
+    status: Mapped[str] = mapped_column(String(20), default="pending")
+    decided_by: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("profiles.id"), nullable=True
+    )
+    decided_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    decision_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # An unused approval past this instant can no longer authorise anything.
+    expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class VerificationRun(Base):
+    """One attempt to establish a postcondition from independent evidence.
+
+    A row here is the only thing that may move an execution out of
+    ``Verifying``. A model's assertion is not a row here; only a recorded check
+    with a pass, fail or unknown result is.
+    """
+
+    __tablename__ = "verification_runs"
+    __table_args__ = (Index("ix_verification_execution", "execution_id"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    org_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("organizations.id", ondelete="CASCADE")
+    )
+    execution_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("executions.id", ondelete="CASCADE")
+    )
+    step_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("execution_steps.id", ondelete="CASCADE"), nullable=True
+    )
+    # The postcondition this run was testing, copied so later edits cannot
+    # retroactively make a past check look like it tested something else.
+    postcondition: Mapped[str] = mapped_column(Text)
+    # passed | failed | unknown
+    result: Mapped[str] = mapped_column(String(16))
+    # Where the evidence came from: a read-back, an API response, a query.
+    source: Mapped[str] = mapped_column(String(60))
+    evidence_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    checked_by: Mapped[str] = mapped_column(String(36), ForeignKey("profiles.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class ExecutionEvent(Base):
+    """Append-only history of an execution, so any state can be explained."""
+
+    __tablename__ = "execution_events"
+    __table_args__ = (Index("ix_execution_events_execution", "execution_id"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    execution_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("executions.id", ondelete="CASCADE")
+    )
+    org_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("organizations.id", ondelete="CASCADE")
+    )
+    actor_id: Mapped[str] = mapped_column(String(36), ForeignKey("profiles.id"))
+    action: Mapped[str] = mapped_column(String(40))
+    from_status: Mapped[str | None] = mapped_column(String(24), nullable=True)
+    to_status: Mapped[str | None] = mapped_column(String(24), nullable=True)
+    detail_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

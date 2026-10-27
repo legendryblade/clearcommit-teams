@@ -110,3 +110,55 @@ class CommitmentUpdateRequest(BaseModel):
 
 class CheckClaimsRequest(BaseModel):
     text: str = Field(min_length=1, max_length=20000)
+
+
+class ExecutionCreateRequest(BaseModel):
+    goal: str = Field(min_length=1, max_length=4000)
+    steps: list[str] = Field(default_factory=list, max_length=50)
+
+
+class ExecutionStepCreateRequest(BaseModel):
+    title: str = Field(min_length=1, max_length=300)
+    kind: str = Field(default="read", pattern="^(read|write|notify|approve)$")
+    postcondition: str | None = Field(default=None, max_length=2000)
+
+
+class ExecutionAdvanceRequest(BaseModel):
+    """Move an execution to another state. Only legal moves are accepted."""
+
+    status: str = Field(min_length=1, max_length=24)
+    detail: str | None = Field(default=None, max_length=4000)
+
+
+class ExecutionCancelRequest(BaseModel):
+    reason: str | None = Field(default=None, max_length=2000)
+
+
+class ApprovalCreateRequest(BaseModel):
+    summary: str = Field(min_length=1, max_length=4000)
+    target: str = Field(min_length=1, max_length=300)
+    params: dict = Field(default_factory=dict)
+    risk: str = Field(default="medium", pattern="^(low|medium|high|critical)$")
+    step_id: str | None = Field(default=None, max_length=64)
+    # Minutes until an unused approval stops authorising anything.
+    ttl_minutes: int = Field(default=1440, ge=1, le=43200)
+
+
+class ApprovalDecisionRequest(BaseModel):
+    decision: str = Field(pattern="^(approved|rejected)$")
+    note: str | None = Field(default=None, max_length=2000)
+    # The digest the reviewer believes they are deciding on. If it does not
+    # match, the decision is refused rather than applied to a different action.
+    action_digest: str = Field(min_length=64, max_length=64)
+
+
+class ApprovalConsumeRequest(BaseModel):
+    action_digest: str = Field(min_length=64, max_length=64)
+
+
+class VerificationRequest(BaseModel):
+    result: str = Field(pattern="^(passed|failed|unknown)$")
+    source: str = Field(min_length=1, max_length=60)
+    postcondition: str | None = Field(default=None, max_length=2000)
+    evidence: dict = Field(default_factory=dict)
+    step_id: str | None = Field(default=None, max_length=64)

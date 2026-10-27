@@ -211,3 +211,42 @@ class IdempotencyRecord(Base):
     key_digest: Mapped[str] = mapped_column(String(64))
     response_json: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+class Commitment(Base):
+    """A promise made in a conversation, with its owner and evidence.
+
+    Separate from a decision or an idea: this is someone explicitly accepting
+    responsibility. The owner is confirmed by a human, never inferred.
+    """
+
+    __tablename__ = "commitments"
+    __table_args__ = (
+        Index("ix_commitments_org_status", "org_id", "status"),
+        Index("ix_commitments_owner", "owner_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    org_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("organizations.id", ondelete="CASCADE")
+    )
+    # Nullable: a personal commitment belongs to one person, not a company.
+    conversation_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("conversations.id", ondelete="SET NULL"), nullable=True
+    )
+    owner_id: Mapped[str] = mapped_column(String(36), ForeignKey("profiles.id"))
+    created_by: Mapped[str] = mapped_column(String(36), ForeignKey("profiles.id"))
+    title: Mapped[str] = mapped_column(String(300))
+    # The promise in the speaker's own words, and the line it came from.
+    evidence_quote: Mapped[str | None] = mapped_column(Text, nullable=True)
+    evidence_utterance_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    due_on: Mapped[str | None] = mapped_column(String(10), nullable=True)  # YYYY-MM-DD
+    # awaiting_confirmation until a human names the owner and the date.
+    status: Mapped[str] = mapped_column(String(24), default="awaiting_confirmation")
+    visibility: Mapped[str] = mapped_column(String(16), default="team")
+    completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )

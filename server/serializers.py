@@ -159,6 +159,25 @@ def messaging_brief(entry: ApprovedMessaging) -> dict:
     }
 
 
+def commitment_brief(commitment: "Commitment") -> dict:
+    return {
+        "commitment_id": commitment.id,
+        "org_id": commitment.org_id,
+        "conversation_id": commitment.conversation_id,
+        "owner_id": commitment.owner_id,
+        "created_by": commitment.created_by,
+        "title": commitment.title,
+        "evidence_quote": commitment.evidence_quote,
+        "evidence_utterance_id": commitment.evidence_utterance_id,
+        "due_on": commitment.due_on,
+        "status": commitment.status,
+        "visibility": commitment.visibility,
+        "completed_at": _iso(commitment.completed_at),
+        "created_at": _iso(commitment.created_at),
+        "updated_at": _iso(commitment.updated_at),
+    }
+
+
 def audit_brief(event: AuditEvent) -> dict:
     detail = None
     if event.detail_json:

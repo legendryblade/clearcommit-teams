@@ -37,6 +37,8 @@
     pendingInvitations: [],
     tab: "overview",
     memberView: null,
+    commitmentsMine: [],
+    commitmentsTeam: [],
   };
 
   let socket = null;
@@ -1054,6 +1056,191 @@
     return card;
   }
 
+  const COMMITMENT_STATUS = {
+    awaiting_confirmation: "Needs confirmation",
+    open: "Open",
+    blocked: "Blocked",
+    done: "Done",
+    cancelled: "Cancelled",
+  };
+
+  function commitmentRow(commitment) {
+    const row = el("div", "commit-row is-" + commitment.status);
+    const main = el("div", "commit-main");
+    main.append(el("span", "commit-title", commitment.title));
+
+    const meta = el("span", "commit-meta");
+    meta.append(el("span", "commit-owner", commitment.owner_name || "Unassigned"));
+    if (commitment.due_on) {
+      meta.append(el("span", "commit-due", "due " + commitment.due_on));
+    } else {
+      meta.append(el("span", "commit-due is-missing", "no date"));
+    }
+    main.append(meta);
+
+    if (commitment.evidence_quote) {
+      main.append(el("q", "commit-evidence", commitment.evidence_quote));
+    }
+
+    row.append(main);
+    row.append(
+      el(
+        "span",
+        "commit-status is-" + commitment.status,
+        COMMITMENT_STATUS[commitment.status] || commitment.status
+      )
+    );
+
+    const actions = el("div", "commit-actions");
+    if (commitment.status === "awaiting_confirmation") {
+      actions.append(button("Confirm", "button-quiet", function () {
+        void updateCommitment(commitment, {
+          due_on: commitment.due_on || new Date().toISOString().slice(0, 10),
+        });
+      }));
+    }
+    if (commitment.status === "open" || commitment.status === "awaiting_confirmation") {
+      actions.append(button("Blocked", "button-quiet", function () {
+        void updateCommitment(commitment, { status: "blocked" });
+      }));
+    }
+    if (commitment.status !== "done" && commitment.status !== "cancelled") {
+      actions.append(button("Done", "button-primary", function () {
+        void updateCommitment(commitment, { status: "done" });
+      }));
+    }
+    if (actions.childNodes.length) row.append(actions);
+    return row;
+  }
+
+  async function updateCommitment(commitment, changes) {
+    try {
+      await net.call("PATCH", "/api/commitments/" + commitment.commitment_id, changes);
+      await refreshCommitments();
+      render();
+    } catch (error) {
+      failure(error, "Could not update that commitment.");
+    }
+  }
+
+  async function refreshCommitments() {
+    if (!state.orgId) {
+      state.commitmentsMine = [];
+      state.commitmentsTeam = [];
+      return;
+    }
+    try {
+      const mine = await net.call("GET", "/api/orgs/" + state.orgId + "/commitments?scope=mine");
+      state.commitmentsMine = mine.commitments || [];
+      const team = await net.call("GET", "/api/orgs/" + state.orgId + "/commitments?scope=team");
+      state.commitmentsTeam = team.commitments || [];
+    } catch (error) {
+      state.commitmentsMine = [];
+      state.commitmentsTeam = [];
+    }
+  }
+
+  function renderCommitmentsTab() {
+    const reviewer = canReview();
+    const mine = state.commitmentsMine || [];
+    const team = state.commitmentsTeam || [];
+    const openMine = mine.filter(function (c) {
+      return c.status !== "done" && c.status !== "cancelled";
+    }).length;
+    const blocked = team.filter(function (c) { return c.status === "blocked"; }).length;
+
+    const card = el("div", "team-card team-commits");
+    const head = el("div", "calls-head");
+    head.append(el("h3", "team-card-title", reviewer ? "Team commitments" : "My commitments"));
+    head.append(el("span", "calls-total", openMine + " open"));
+    card.append(head);
+    card.append(
+      el(
+        "p",
+        "team-card-note",
+        "A promise is only a commitment once a person confirms the owner and the date. Status changes are audited."
+      )
+    );
+    if (blocked) {
+      card.append(el("p", "commit-blocked-note", blocked + " blocked and need attention."));
+    }
+
+    // What you own always comes first.
+    const mineList = el("div", "commit-list");
+    if (!openMine && !mine.length) {
+      card.append(el("p", "team-card-note", "You have no commitments yet."));
+    } else {
+      mine.forEach(function (commitment) { mineList.append(commitmentRow(commitment)); });
+      card.append(mineList);
+    }
+
+    if (reviewer && team.length) {
+      const others = team.filter(function (c) {
+        return c.owner_id !== (state.me && state.me.profile && state.me.profile.user_id);
+      });
+      if (others.length) {
+        card.append(el("h4", "commit-subhead", "Across the team"));
+        const list = el("div", "commit-list");
+        others.forEach(function (commitment) { list.append(commitmentRow(commitment)); });
+        card.append(list);
+      }
+    }
+
+    const form = el("form", "team-form");
+    dom.commitTitle = el("input", "team-input");
+    dom.commitTitle.placeholder = "What did someone promise?";
+    dom.commitDue = el("input", "team-input");
+    dom.commitDue.type = "date";
+    dom.commitOwner = el("select", "team-input");
+    const meId = state.me && state.me.profile && state.me.profile.user_id;
+    (state.members || []).forEach(function (member) {
+      const option = el("option", null, (member.profile && member.profile.display_name) || member.user_id);
+      option.value = member.user_id;
+      dom.commitOwner.append(option);
+    });
+    if (meId) dom.commitOwner.value = meId;
+    const submit = el("button", "button button-primary", "Add commitment");
+    submit.type = "submit";
+    form.append(
+      field("Promise", dom.commitTitle),
+      field("Owner", dom.commitOwner),
+      field("Due date", dom.commitDue),
+      submit
+    );
+    form.addEventListener("submit", function (event) {
+      void createCommitment(event);
+    });
+    card.append(form);
+    return card;
+  }
+
+  async function createCommitment(event) {
+    event.preventDefault();
+    if (!state.orgId) return;
+    const title = (dom.commitTitle.value || "").trim();
+    if (!title) {
+      announce("Give the commitment a title.", "error");
+      return;
+    }
+    setBusy(true);
+    try {
+      await net.call("POST", "/api/orgs/" + state.orgId + "/commitments", {
+        title: title,
+        owner_id: dom.commitOwner.value || null,
+        due_on: dom.commitDue.value || null,
+      });
+      dom.commitTitle.value = "";
+      dom.commitDue.value = "";
+      announce("Commitment added. Confirm it once the owner and date are agreed.", "ok");
+      await refreshCommitments();
+      render();
+    } catch (error) {
+      failure(error, "Could not add that commitment.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function renderPlaybook() {
     const card = el("div", "team-card");
     card.append(el("h3", "team-card-title", "Shared playbook"));
@@ -1343,6 +1530,7 @@
     { id: "overview", label: "Overview" },
     { id: "calls", label: "Calls" },
     { id: "insights", label: "Insights" },
+    { id: "commitments", label: "Commitments" },
     { id: "playbook", label: "Playbook" },
     { id: "team", label: "Team" },
     { id: "settings", label: "Settings" },
@@ -1382,6 +1570,8 @@
       wrap.append(renderCallsTab(), renderConversations());
     } else if (tab === "insights") {
       wrap.append(renderInsights());
+    } else if (tab === "commitments") {
+      wrap.append(renderCommitmentsTab());
     } else if (tab === "playbook") {
       wrap.append(renderPlaybook());
     } else if (tab === "team") {

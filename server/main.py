@@ -128,9 +128,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     _install_exception_handlers(app)
 
-    from .routers import auth, conversations, events, insights, messaging, orgs, playbook
+    from .routers import (
+        auth,
+        commitments,
+        conversations,
+        events,
+        insights,
+        messaging,
+        orgs,
+        playbook,
+    )
 
-    for router in (auth, orgs, conversations, insights, playbook, messaging, events):
+    for router in (auth, orgs, conversations, insights, playbook, messaging, events, commitments):
         app.include_router(router.router)
 
     @app.get("/health")

@@ -1,4 +1,4 @@
-"""Shared fixtures for the network backend tests.
+﻿"""Shared fixtures for the network backend tests.
 
 These tests run against the real FastAPI app with a real database (SQLite in
 demo mode, PostgreSQL when configured). Nothing here mocks the service layer:
@@ -24,6 +24,9 @@ def app_settings(tmp_path_factory):
     data_dir = tmp_path_factory.mktemp("server-data")
     env = {
         "CLEARCOMMIT_SERVER_DATA_DIR": str(data_dir),
+        # The suite creates many accounts from one loopback address, so the
+        # per-IP signup limit would trip mid-run. Tests are not a DoS.
+        "CLEARCOMMIT_RATE_LIMIT_PER_MINUTE": "100000",
         "CLEARCOMMIT_DATABASE_URL": f"sqlite:///{(data_dir / 'test.db').as_posix()}",
     }
     # Ignore any Supabase configuration in the ambient environment so these

@@ -3626,3 +3626,43 @@ body.is-web .rail-conversations {
 .interpret-translated { font-size: 14px; color: var(--ink); line-height: 1.45; }
 .interpret-error { font-size: 12px; color: var(--red); }
 .interpret-empty { margin: 0; font-size: 12.5px; color: var(--ink-faint); }
+
+/* Commitments */
+.commit-list { display: grid; gap: 8px; }
+.commit-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-small);
+  background: var(--card);
+  border-left: 3px solid var(--teal);
+}
+.commit-row.is-blocked { border-left-color: var(--red); background: var(--signal-soft); }
+.commit-row.is-done { border-left-color: var(--green); opacity: 0.75; }
+.commit-row.is-awaiting_confirmation { border-left-color: var(--gold); }
+.commit-main { display: grid; gap: 3px; min-width: 0; }
+.commit-title { font-weight: 600; color: var(--ink); font-size: 13.5px; }
+.commit-meta { display: flex; gap: 8px; font-size: 12px; color: var(--ink-faint); }
+.commit-due.is-missing { color: var(--gold); }
+.commit-evidence {
+  margin: 2px 0 0; padding-left: 8px;
+  border-left: 2px solid var(--line-strong);
+  font-size: 12.5px; color: var(--ink-soft); font-style: italic;
+}
+.commit-status {
+  align-self: start;
+  padding: 2px 8px; border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  font-size: 10.5px; letter-spacing: 0.04em; text-transform: uppercase;
+  color: var(--ink-soft); white-space: nowrap;
+}
+.commit-status.is-awaiting_confirmation { border-color: var(--gold); color: var(--gold); }
+.commit-status.is-open { border-color: var(--teal); color: var(--teal); }
+.commit-status.is-blocked { border-color: var(--red); color: var(--red); }
+.commit-status.is-done { border-color: var(--green); color: var(--green); }
+.commit-actions { grid-column: 1 / -1; display: flex; gap: 6px; }
+.commit-blocked-note { margin: 0; padding: 6px 10px; border-radius: var(--radius-small); background: var(--signal-soft); color: var(--red); font-size: 12.5px; }
+.commit-subhead { font-family: var(--font-display); font-size: 14px; color: var(--ink-soft); margin: 12px 0 0; }
+.team-commits { grid-column: 1 / -1; }

@@ -91,5 +91,22 @@ class MessagingCreateRequest(BaseModel):
     claim_text: str = Field(min_length=1, max_length=20000)
 
 
+class CommitmentCreateRequest(BaseModel):
+    title: str = Field(min_length=1, max_length=300)
+    owner_id: str | None = Field(default=None, max_length=64)
+    due_on: str | None = Field(default=None, max_length=10)
+    conversation_id: str | None = Field(default=None, max_length=64)
+    evidence_quote: str | None = Field(default=None, max_length=2000)
+    evidence_utterance_id: str | None = Field(default=None, max_length=64)
+    visibility: str = Field(default="team", pattern="^(private|team)$")
+
+
+class CommitmentUpdateRequest(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=300)
+    status: str | None = Field(default=None, max_length=24)
+    due_on: str | None = Field(default=None, max_length=10)
+    owner_id: str | None = Field(default=None, max_length=64)
+
+
 class CheckClaimsRequest(BaseModel):
     text: str = Field(min_length=1, max_length=20000)

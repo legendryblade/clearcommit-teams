@@ -78,13 +78,26 @@ def test_utterance_validation_requires_speaker_and_text() -> None:
 def test_session_validation_defaults_are_demo_friendly() -> None:
     parsed = parse_session_input({"title": "  Renewal call  "})
     assert parsed["title"] == "Renewal call"
-    assert parsed["customer_language"] == "es"
+    # A new conversation matches the rep's language rather than silently
+    # defaulting the customer to Spanish and mistranslating the transcript.
+    assert parsed["customer_language"] == "en"
     assert parsed["rep_language"] == "en"
     assert parsed["rep_name"] == "You"
     with pytest.raises(ValidationError):
         parse_session_input({"title": ""})
     with pytest.raises(ValidationError):
         parse_session_input({"title": "Call", "occurred_on": "10/24/2026"})
+
+
+def test_customer_language_follows_explicit_rep_language() -> None:
+    parsed = parse_session_input({"title": "Llamada", "rep_language": "es"})
+    assert parsed["rep_language"] == "es"
+    assert parsed["customer_language"] == "es"
+    # An explicit customer language still wins over the rep's.
+    parsed = parse_session_input(
+        {"title": "Call", "rep_language": "en", "customer_language": "pt-br"}
+    )
+    assert parsed["customer_language"] == "pt-br"
 
 
 def test_language_and_pair_labels() -> None:

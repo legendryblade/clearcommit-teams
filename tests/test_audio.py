@@ -134,7 +134,7 @@ def _patch_poll_dependencies(monkeypatch, transcriber):
             pairs, self._pairs = self._pairs, []
             return pairs
 
-    monkeypatch.setattr(transcribe_mod, "get_transcriber", lambda provider="groq": transcriber)
+    monkeypatch.setattr(transcribe_mod, "get_transcriber", lambda provider="groq", model=None: transcriber)
     return FakeSession
 
 
@@ -158,7 +158,7 @@ def test_both_sources_label_you_and_caller(monkeypatch) -> None:
     import clearcommit_teams.audio.transcribe as transcribe_mod
 
     monkeypatch.setattr(
-        transcribe_mod, "get_transcriber", lambda provider="groq": TurnTranscriber()
+        transcribe_mod, "get_transcriber", lambda provider="groq", model=None: TurnTranscriber()
     )
 
     bridge = object.__new__(Bridge)
@@ -181,7 +181,7 @@ def test_no_chunks_returns_empty_without_calling_a_provider(monkeypatch) -> None
 
     called = {"n": 0}
 
-    def boom(provider="groq"):
+    def boom(provider="groq", model=None):
         called["n"] += 1
         raise AssertionError("a provider must not be called with no audio")
 
@@ -268,3 +268,47 @@ def test_language_names_cover_the_ui_list() -> None:
 
     for code, name in interpret.SUPPORTED_LANGUAGES:
         assert interpret.language_name(code) == name
+
+
+# --- configurable models --------------------------------------------------
+
+def test_stt_model_defaults_to_the_accurate_variant(monkeypatch) -> None:
+    from clearcommit_teams.audio import transcribe
+
+    monkeypatch.delenv("CLEARCOMMIT_STT_MODEL_GROQ", raising=False)
+    assert transcribe.stt_model("groq") == "whisper-large-v3"
+    assert transcribe.DEFAULT_GROQ_STT_MODEL != "whisper-large-v3-turbo"
+
+
+def test_stt_model_precedence_override_then_env(monkeypatch) -> None:
+    from clearcommit_teams.audio import transcribe
+
+    monkeypatch.setenv("CLEARCOMMIT_STT_MODEL_GROQ", "whisper-large-v3-turbo")
+    assert transcribe.stt_model("groq") == "whisper-large-v3-turbo"
+    # An explicit setting beats the environment.
+    assert transcribe.stt_model("groq", "whisper-large-v3") == "whisper-large-v3"
+
+
+def test_provider_status_reports_the_configured_model(monkeypatch) -> None:
+    from clearcommit_teams.audio import transcribe
+
+    monkeypatch.delenv("CLEARCOMMIT_STT_MODEL_GROQ", raising=False)
+    state = transcribe.provider_status("whisper-large-v3")
+    assert state["model"] == "whisper-large-v3"
+
+
+def test_tts_settings_override_then_env_then_default(monkeypatch) -> None:
+    from clearcommit_teams.audio import interpret
+
+    monkeypatch.delenv("ELEVENLABS_VOICE_ID", raising=False)
+    monkeypatch.delenv("CLEARCOMMIT_TTS_MODEL", raising=False)
+    defaults = interpret.tts_settings()
+    assert defaults["voice"] == interpret.ELEVENLABS_VOICE
+    assert defaults["model"] == interpret.ELEVENLABS_MODEL
+    override = interpret.tts_settings("voice-x", "model-y")
+    assert override["voice"] == "voice-x"
+    assert override["model"] == "model-y"
+    monkeypatch.setenv("ELEVENLABS_VOICE_ID", "env-voice")
+    assert interpret.tts_settings()["voice"] == "env-voice"
+    # Explicit still wins over the environment.
+    assert interpret.tts_settings("explicit")["voice"] == "explicit"

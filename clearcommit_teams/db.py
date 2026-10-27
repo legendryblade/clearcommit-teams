@@ -166,6 +166,12 @@ DEFAULT_SETTINGS = {
     "model": "",
     "timeout_s": "25",
     "reviewer_name": "",
+    # Live capture and interpretation models. Empty means "use the .env value
+    # or the built-in accurate default", so an unset app still behaves well.
+    "stt_provider": "groq",
+    "stt_model": "",
+    "tts_voice": "",
+    "tts_model": "",
 }
 
 

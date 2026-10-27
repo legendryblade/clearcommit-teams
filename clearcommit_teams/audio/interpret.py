@@ -35,6 +35,17 @@ ELEVENLABS_VOICE = "EXAVITQu4vr4xnSDxMaL"  # Sarah, a premade voice on free plan
 ELEVENLABS_MODEL = "eleven_turbo_v2_5"
 
 
+def tts_settings(voice: str | None = None, model: str | None = None) -> dict:
+    """Resolve the TTS voice/model: explicit override > .env > default."""
+    chosen_voice = (voice or "").strip() or (os.environ.get("ELEVENLABS_VOICE_ID") or "").strip() or ELEVENLABS_VOICE
+    chosen_model = (model or "").strip() or (os.environ.get("CLEARCOMMIT_TTS_MODEL") or "").strip() or ELEVENLABS_MODEL
+    return {
+        "provider": "elevenlabs" if _elevenlabs_key() else "groq-orpheus",
+        "voice": chosen_voice,
+        "model": chosen_model,
+    }
+
+
 class InterpretationError(RuntimeError):
     def __init__(self, message: str, code: str = "interpretation_failed", retryable: bool = False):
         super().__init__(message)
@@ -54,7 +65,8 @@ def language_name(code: str) -> str:
     return _LANGUAGE_NAMES.get(code, code)
 
 
-def status() -> dict:
+def status(voice: str | None = None, model: str | None = None) -> dict:
+    speech = tts_settings(voice, model)
     return {
         "translation": {
             "configured": bool(_groq_key()),
@@ -63,7 +75,9 @@ def status() -> dict:
         },
         "speech": {
             "configured": bool(_elevenlabs_key()) or bool(_groq_key()),
-            "provider": "elevenlabs" if _elevenlabs_key() else "groq-orpheus",
+            "provider": speech["provider"],
+            "voice": speech["voice"],
+            "model": speech["model"],
             "detail": (
                 "Natural voice synthesis is available."
                 if (_elevenlabs_key() or _groq_key())
@@ -147,7 +161,7 @@ def translate(text: str, target: str, source: str | None = None) -> Translation:
     return Translation(text=translated, target=target, target_name=language_name(target))
 
 
-def synthesise(text: str, target: str = "en") -> bytes:
+def synthesise(text: str, target: str = "en", voice: str | None = None, model: str | None = None) -> bytes:
     """Return spoken audio (MP3) for ``text`` in a natural voice."""
     text = (text or "").strip()
     if not text:
@@ -155,7 +169,7 @@ def synthesise(text: str, target: str = "en") -> bytes:
 
     key = _elevenlabs_key()
     if key:
-        return _elevenlabs(text, key)
+        return _elevenlabs(text, key, voice=voice, model=model)
     groq = _groq_key()
     if groq:
         return _groq_orpheus(text, groq, target)
@@ -165,10 +179,11 @@ def synthesise(text: str, target: str = "en") -> bytes:
     )
 
 
-def _elevenlabs(text: str, key: str) -> bytes:
+def _elevenlabs(text: str, key: str, voice: str | None = None, model: str | None = None) -> bytes:
     import httpx
 
-    voice = os.environ.get("ELEVENLABS_VOICE_ID") or ELEVENLABS_VOICE
+    settings = tts_settings(voice, model)
+    voice = settings["voice"]
     try:
         response = httpx.post(
             f"https://api.elevenlabs.io/v1/text-to-speech/{voice}",
@@ -177,7 +192,7 @@ def _elevenlabs(text: str, key: str) -> bytes:
                 "Content-Type": "application/json",
                 "Accept": "audio/mpeg",
             },
-            json={"text": text, "model_id": ELEVENLABS_MODEL},
+            json={"text": text, "model_id": settings["model"]},
             timeout=45.0,
         )
     except httpx.HTTPError as exc:

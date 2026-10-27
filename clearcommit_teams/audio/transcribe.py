@@ -50,13 +50,36 @@ def groq_key() -> str | None:
     return None
 
 
-def provider_status() -> dict:
+# Model ids are configurable from the app's settings (and .env), but they keep
+# an accurate default: whisper-large-v3 over the faster turbo variant, because
+# a sales transcript that mishears a commitment is worse than one that takes
+# an extra second.
+DEFAULT_GROQ_STT_MODEL = "whisper-large-v3"
+DEFAULT_DEEPGRAM_STT_MODEL = "nova-3"
+
+
+def _env_model(name: str, default: str) -> str:
+    return (os.environ.get(name) or "").strip() or default
+
+
+def stt_model(provider: str = "groq", override: str | None = None) -> str:
+    """Resolve the STT model for a provider: override > .env > default."""
+    if override and str(override).strip():
+        return str(override).strip().lower() if provider in {"deepgram", "diarize", "speakers"} else str(override).strip()
+    provider = str(provider).strip().lower()
+    if provider in {"deepgram", "diarize", "speakers"}:
+        return _env_model("CLEARCOMMIT_STT_MODEL_DEEPGRAM", DEFAULT_DEEPGRAM_STT_MODEL)
+    return _env_model("CLEARCOMMIT_STT_MODEL_GROQ", DEFAULT_GROQ_STT_MODEL)
+
+
+def provider_status(model_override: str | None = None) -> dict:
+    """Report the live STT configuration, honoring an app-settings model."""
     groq = groq_key()
     deepgram = deepgram_key()
     return {
         "provider": "groq-whisper",
         "configured": bool(groq),
-        "model": "whisper-large-v3",
+        "model": stt_model("groq", model_override),
         "detail": (
             "Groq Whisper is configured."
             if groq
@@ -65,7 +88,7 @@ def provider_status() -> dict:
         "diarization": {
             "provider": "deepgram-nova",
             "configured": bool(deepgram),
-            "model": "nova-3",
+            "model": stt_model("deepgram", model_override),
             "detail": (
                 "Speaker separation is available."
                 if deepgram
@@ -78,9 +101,9 @@ def provider_status() -> dict:
 class GroqTranscriber:
     name = "groq-whisper"
 
-    def __init__(self, api_key: str | None = None, model: str = "whisper-large-v3"):
+    def __init__(self, api_key: str | None = None, model: str | None = None):
         self.api_key = api_key or groq_key()
-        self.model = model
+        self.model = stt_model("groq", model)
         if not self.api_key:
             raise TranscriptionError(
                 "Live transcription needs GROQ_API_KEY to be set.",
@@ -167,9 +190,9 @@ class DeepgramTranscriber:
 
     name = "deepgram-nova"
 
-    def __init__(self, api_key: str | None = None, model: str = "nova-3"):
+    def __init__(self, api_key: str | None = None, model: str | None = None):
         self.api_key = api_key or deepgram_key()
-        self.model = model
+        self.model = stt_model("deepgram", model)
         if not self.api_key:
             raise TranscriptionError(
                 "Speaker separation needs DEEPGRAM_API_KEY to be set.",
@@ -316,8 +339,12 @@ class DiarizingTranscriber:
         )
 
 
-def get_transcriber(provider: str = "groq") -> Transcriber:
-    """Return a transcriber. Groq is the default; Deepgram adds speakers."""
+def get_transcriber(provider: str = "groq", model: str | None = None) -> Transcriber:
+    """Return a transcriber. Groq is the default; Deepgram adds speakers.
+
+    ``model`` is the app-settings override; when omitted the .env value or the
+    built-in accurate default applies (see ``stt_model``).
+    """
     if str(provider).strip().lower() in {"deepgram", "diarize", "speakers"}:
-        return DiarizingTranscriber()
-    return GroqTranscriber()
+        return DiarizingTranscriber(inner=DeepgramTranscriber(model=model))
+    return GroqTranscriber(model=model)

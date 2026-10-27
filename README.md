@@ -17,19 +17,48 @@ record.
 
 ## Run it
 
-### Desktop app
+### Desktop app (fastest path)
 
 ```powershell
 launch.bat
 ```
 
-Or:
+That creates `.venv`, installs the dependencies on first run, and opens the app.
+
+Live capture needs one API key. Put it in a `.env` file in the repository root:
+
+```powershell
+COPY .env.example .env
+# then edit .env and set:
+# GROQ_API_KEY=gsk_...
+```
+
+`.env` is read from the repo root when running from source, and from the folder
+next to `ClearCommitTeams.exe` when running a packaged build (the build copies
+it automatically). Without a key the app still runs — capture records, but
+transcription reports that the key is missing instead of staying silent.
+
+Other optional keys: `DEEPGRAM_API_KEY` (speaker separation),
+`ELEVENLABS_API_KEY` (natural voice for interpretation).
+
+Manually, without the batch file:
 
 ```powershell
 py -3 -m venv .venv
 & ".venv\Scripts\python.exe" -m pip install -r requirements.txt
 & ".venv\Scripts\python.exe" -m clearcommit_teams
 ```
+
+### Building the Windows exe
+
+```powershell
+.\build.ps1
+```
+
+Produces `dist\ClearCommitTeams\ClearCommitTeams.exe`, copies `.env` beside it,
+and fails the build if the audio runtime is missing. The build is windowed
+(no console); if it ever starts and exits immediately, rebuild with
+`--console` instead of `--windowed` to read the traceback.
 
 ### Team workspace (local, no cloud)
 
@@ -72,7 +101,47 @@ service is stateless.
 | Team | Members, roles, invitations, per-member view |
 | Settings | Companies and join code |
 
-## Joining a team
+## Choosing transcript and voice models
+
+Open **Workspace settings** (the provider chip, or the gear icon) to set:
+
+| Setting | Default | Notes |
+| --- | --- | --- |
+| Transcription provider | Groq Whisper | Deepgram adds speaker separation |
+| Transcription model | `whisper-large-v3` | The accurate model, not the faster turbo variant |
+| Speaking voice | ElevenLabs Sarah | Any ElevenLabs voice id |
+| Speech model | `eleven_turbo_v2_5` | ElevenLabs model id |
+
+Blank fields fall back to `.env`, then to these defaults, so leaving them empty
+is always safe. The capture panel and the Interpretation tab both show which
+model is actually in use, so a misconfiguration is visible rather than silent.
+
+You can also pin models in `.env`:
+
+```powershell
+CLEARCOMMIT_STT_MODEL_GROQ=whisper-large-v3
+CLEARCOMMIT_STT_MODEL_DEEPGRAM=nova-3
+CLEARCOMMIT_TTS_MODEL=eleven_turbo_v2_5
+ELEVENLABS_VOICE_ID=EXAVITQu4vr4xnSDxMaL
+```
+
+## Navigating the app
+
+The left rail switches between views and keeps your place:
+
+| View | Desktop | Web |
+| --- | --- | --- |
+| Conversation desk | ✓ | — |
+| Sales coach | ✓ | — |
+| Playbook | ✓ | — |
+| Signals | ✓ | — |
+| Interpretation | ✓ | — |
+| Team workspace | ✓ | ✓ |
+
+A conversation must be open before you can import a transcript or record.
+Recording appends to the open conversation; press **Stop recording** to save
+the captured lines to its transcript.
+
 
 A manager creates a company and gets a short code (for example `Z9D9GRE7`).
 An employee signs in, types the code, and is in. The code identifies the
@@ -89,13 +158,13 @@ manager rights.
   confirms the owner and the date
 - Every commitment change is written to a history table
 - Join codes are idempotent; wrong codes are refused
-- 190 automated tests
+- 280 automated tests
 
 ## Development
 
 ```powershell
 & ".venv\Scripts\python.exe" -m pip install -r requirements-dev.txt
-& ".venv\Scripts\python.exe" -m pytest -q          # 190 tests
+& ".venv\Scripts\python.exe" -m pytest -q          # 280 tests
 node --test tests\ui_bridge.test.cjs              # bridge client
 ```
 
@@ -116,9 +185,9 @@ Audio: [`docs/audio-roadmap.md`](docs/audio-roadmap.md)
 
 ## Known limitations
 
-1. **Live capture is unreliable on this machine.** The working microphone only
-   exposes a Windows host API that cannot stream. The pipeline is implemented
-   and returns transcripts in testing; the device is the blocker.
+1. **Live capture needs a streamable host API.** Most Windows inputs stream
+   fine (MME, DirectSound, WASAPI); WDM-KS endpoints answer a one-shot
+   recording but cannot stream, so they are filtered out of the device list.
 2. **Interpretation** works through the API (English→Urdu 0.46s, English→Arabic
    with speech 2.09s); the two-column view is new and not fully exercised.
 3. **Sync is explicit.** A desktop conversation reaches the team only when the

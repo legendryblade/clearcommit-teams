@@ -548,6 +548,7 @@
           </header>
 
           <div class="inline-alert" id="interpret-alert" role="status" hidden></div>
+          <p class="interpret-note" id="interpret-note" hidden></p>
 
           <div class="interpret-panel">
             <div class="interpret-controls">
@@ -732,6 +733,32 @@
           <input id="settings-reviewer" name="reviewer_name" type="text" maxlength="80" placeholder="Used to attribute playbook approvals" autocomplete="name">
         </div>
       </div>
+
+      <fieldset class="mode-picker">
+        <legend>Live capture and voice</legend>
+        <div class="settings-grid">
+          <div class="field">
+            <label for="settings-stt-provider">Transcription provider</label>
+            <select id="settings-stt-provider" name="stt_provider" class="capture-input">
+              <option value="groq">Groq Whisper</option>
+              <option value="deepgram">Deepgram (speaker separation)</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="settings-stt-model">Transcription model</label>
+            <input id="settings-stt-model" name="stt_model" type="text" maxlength="140" placeholder="whisper-large-v3" autocomplete="off">
+          </div>
+          <div class="field">
+            <label for="settings-tts-voice">Speaking voice <span class="label-note">id</span></label>
+            <input id="settings-tts-voice" name="tts_voice" type="text" maxlength="80" placeholder="ElevenLabs voice id" autocomplete="off">
+          </div>
+          <div class="field">
+            <label for="settings-tts-model">Speech model</label>
+            <input id="settings-tts-model" name="tts_model" type="text" maxlength="80" placeholder="eleven_turbo_v2_5" autocomplete="off">
+          </div>
+        </div>
+        <span class="field-hint">Leave blank to use the accurate default (whisper-large-v3). Blank voice/model falls back to the .env value, then the built-in default.</span>
+      </fieldset>
 
       <div class="key-note">
         <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M10 2l6 3v4c0 4-2.6 7.4-6 9-3.4-1.6-6-5-6-9V5l6-3z"></path><path d="M7.5 10l1.8 1.8 3.5-4"></path></svg>

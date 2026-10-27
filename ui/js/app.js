@@ -180,6 +180,10 @@
     settingsModel: "settings-model",
     settingsTimeout: "settings-timeout",
     settingsReviewer: "settings-reviewer",
+    settingsSttProvider: "settings-stt-provider",
+    settingsSttModel: "settings-stt-model",
+    settingsTtsVoice: "settings-tts-voice",
+    settingsTtsModel: "settings-tts-model",
     settingsStatus: "settings-status",
     settingsError: "settings-error",
     testProvider: "test-provider",
@@ -1647,6 +1651,12 @@
     ui.settingsModel.value = state.settings.model || "";
     ui.settingsTimeout.value = state.settings.timeout_s || 25;
     ui.settingsReviewer.value = state.settings.reviewer_name || "";
+    if (ui.settingsSttProvider) {
+      ui.settingsSttProvider.value = state.settings.stt_provider || "groq";
+    }
+    if (ui.settingsSttModel) ui.settingsSttModel.value = state.settings.stt_model || "";
+    if (ui.settingsTtsVoice) ui.settingsTtsVoice.value = state.settings.tts_voice || "";
+    if (ui.settingsTtsModel) ui.settingsTtsModel.value = state.settings.tts_model || "";
     hideAlert(ui.settingsError);
     renderSettingsStatus(state.provider, "", "");
     openDialog(ui.settingsDialog);
@@ -1660,6 +1670,10 @@
       model: ui.settingsModel.value.trim(),
       timeout_s: Number(ui.settingsTimeout.value || 25),
       reviewer_name: ui.settingsReviewer.value.trim(),
+      stt_provider: ui.settingsSttProvider ? ui.settingsSttProvider.value : "groq",
+      stt_model: ui.settingsSttModel ? ui.settingsSttModel.value.trim() : "",
+      tts_voice: ui.settingsTtsVoice ? ui.settingsTtsVoice.value.trim() : "",
+      tts_model: ui.settingsTtsModel ? ui.settingsTtsModel.value.trim() : "",
     };
   }
 
@@ -2014,9 +2028,17 @@
         return;
       }
       ui.capturePanel.hidden = false;
-      if (!status.transcription.configured) {
+      // Pay attention to the real status: the model is configurable, so report
+      // what is actually going to run rather than one hard-coded key name.
+      const stt = status.transcription || {};
+      if (!stt.configured) {
         ui.captureNote.textContent =
-          "Capturing works, but transcription needs GROQ_API_KEY set on this computer.";
+          "Capturing works, but transcription needs an API key set on this computer (GROQ_API_KEY, or DEEPGRAM_API_KEY for speaker separation).";
+      } else {
+        ui.captureNote.textContent = "Transcribing with " + (stt.model || "the default model") + ".";
+      }
+      if (ui.captureProvider && state.settings && state.settings.stt_provider) {
+        ui.captureProvider.value = state.settings.stt_provider;
       }
       await refreshCaptureDevices();
     } catch (error) {
@@ -2057,6 +2079,13 @@
 
   async function initInterpretView() {
     if (!ui.interpretStart) return;
+    // This runs on every visit to the tab. Bind the controls once, or each
+    // visit stacks another handler and one click starts several recordings.
+    if (!initInterpretView.bound) {
+      initInterpretView.bound = true;
+      ui.interpretStart.addEventListener("click", function () { void startInterpretation(); });
+      ui.interpretStop.addEventListener("click", function () { void stopInterpretation(); });
+    }
     try {
       const status = await bridge.call("interpret_status");
       if (!status.translation.configured) {
@@ -2083,12 +2112,18 @@
           ui.interpretTarget.append(opt);
         });
       }
+      // Say which models are actually in use, so a misconfigured voice or
+      // transcriber is visible on this tab instead of failing silently.
+      if (ui.interpretNote) {
+        const speech = status.speech || {};
+        ui.interpretNote.hidden = false;
+        ui.interpretNote.textContent =
+          "Transcribing with " + (status.transcription_signature || "the configured model") +
+          "; voice " + (speech.voice || "default") + " (" + (speech.model || "default") + ").";
+      }
     } catch (error) {
       showGlobalAlert(describeError(error), "warn");
     }
-
-    ui.interpretStart.addEventListener("click", function () { void startInterpretation(); });
-    ui.interpretStop.addEventListener("click", function () { void stopInterpretation(); });
   }
 
   async function startInterpretation() {
@@ -2121,7 +2156,9 @@
   async function pollInterpretation() {
     if (!interp.active) return;
     try {
-      const result = await bridge.call("audio_poll", { provider: "groq" });
+      // No provider override: the bridge uses the saved settings, so the
+      // capture provider and the interpretation provider never disagree.
+      const result = await bridge.call("audio_poll", {});
       (result.turns || []).forEach(function (turn) {
         void interpretTurn(turn.text, turn.speaker === "customer");
       });
@@ -2336,7 +2373,13 @@
           session_id: state.session.id,
           speaker: speaker,
           original_text: text.trim(),
-          language: state.session.customer_language || "en",
+          // Each side is tagged with the language that side speaks. Using the
+          // customer's language for the rep's microphone turns made the
+          // transcript mistranslate the user's own speech.
+          language:
+            speaker === "rep"
+              ? state.session.rep_language || "en"
+              : state.session.customer_language || "en",
         });
       }
       await selectSession(state.session.id);

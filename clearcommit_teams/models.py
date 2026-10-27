@@ -182,8 +182,11 @@ def parse_session_input(payload: Any) -> dict:
     customer_name = read_text(data, "customer_name", "Customer name", max_length=120)
     company = read_text(data, "company", "Company", max_length=120)
     rep_name = read_text(data, "rep_name", "Representative name", max_length=80, default="You") or "You"
-    customer_language = normalize_language(data.get("customer_language"), "es")
+    # Default to the language the rep is speaking. A new conversation is
+    # overwhelmingly an English one, and defaulting the customer to Spanish
+    # silently mistranslated every transcript recorded into it.
     rep_language = normalize_language(data.get("rep_language"), "en")
+    customer_language = normalize_language(data.get("customer_language"), rep_language)
     occurred_on = read_text(data, "occurred_on", "Conversation date", max_length=10, default=today_local_iso())
     if not _DATE_RE.match(occurred_on):
         raise ValidationError("Conversation date must use YYYY-MM-DD.")
@@ -378,12 +381,22 @@ def parse_settings_input(payload: Any, current: Mapping[str, Any]) -> dict:
     if not 5 <= timeout_s <= 120:
         raise ValidationError("Provider timeout must be between 5 and 120 seconds.")
     reviewer_name = read_text(data, "reviewer_name", "Reviewer name", max_length=80)
+    stt_provider = str(data.get("stt_provider", current.get("stt_provider", "groq")) or "groq").strip().lower()
+    if stt_provider not in ("groq", "deepgram"):
+        raise ValidationError("Choose Groq or Deepgram for live transcription.")
+    stt_model = read_text(data, "stt_model", "Transcription model", max_length=140)
+    tts_voice = read_text(data, "tts_voice", "Voice", max_length=80)
+    tts_model = read_text(data, "tts_model", "Speech model", max_length=80)
     return {
         "provider_mode": mode,
         "base_url": base_url,
         "model": model,
         "timeout_s": timeout_s,
         "reviewer_name": reviewer_name,
+        "stt_provider": stt_provider,
+        "stt_model": stt_model,
+        "tts_voice": tts_voice,
+        "tts_model": tts_model,
     }
 
 

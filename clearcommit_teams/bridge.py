@@ -129,6 +129,10 @@ class Bridge:
             "model": settings.get("model", ""),
             "timeout_s": settings.get("timeout_s", 25),
             "reviewer_name": settings.get("reviewer_name", ""),
+            "stt_provider": settings.get("stt_provider", "groq"),
+            "stt_model": settings.get("stt_model", ""),
+            "tts_voice": settings.get("tts_voice", ""),
+            "tts_model": settings.get("tts_model", ""),
         }
 
     def _provider_status_payload(self) -> dict:
@@ -346,6 +350,10 @@ class Bridge:
                 "model": saved.get("model", ""),
                 "timeout_s": saved.get("timeout_s", 25),
                 "reviewer_name": saved.get("reviewer_name", ""),
+                "stt_provider": saved.get("stt_provider", "groq"),
+                "stt_model": saved.get("stt_model", ""),
+                "tts_voice": saved.get("tts_voice", ""),
+                "tts_model": saved.get("tts_model", ""),
             },
             "provider": self._provider_status_payload(),
         }
@@ -422,11 +430,19 @@ class Bridge:
 
     def _interpret_status(self, _payload: Mapping[str, Any]) -> dict:
         from .audio import interpret
+        from .audio.transcribe import provider_status as stt_status
 
-        data = interpret.status()
+        saved = self.repo.settings()
+        data = interpret.status(
+            voice=saved.get("tts_voice") or None,
+            model=saved.get("tts_model") or None,
+        )
         data["outputs"] = [
             {"index": idx, "name": name} for idx, name in interpret.output_devices()
         ]
+        # One line the UI can show without knowing the provider internals.
+        stt = stt_status(saved.get("stt_model") or None)
+        data["transcription_signature"] = "{} / {}".format(stt.get("provider"), stt.get("model"))
         return data
 
     def interpret(self, payload: Any = None) -> dict:
@@ -451,7 +467,13 @@ class Bridge:
         spoken = False
         duration = None
         if speak:
-            audio = interpret.synthesise(result.text, target)
+            saved = self.repo.settings()
+            audio = interpret.synthesise(
+                result.text,
+                target,
+                voice=saved.get("tts_voice") or None,
+                model=saved.get("tts_model") or None,
+            )
             data, rate = interpret._decode_audio(audio)
             duration = round(len(data) / float(rate or 1), 2)
             interpret.speak_to_device(audio, device)
@@ -474,6 +496,7 @@ class Bridge:
         from .audio.transcribe import provider_status
 
         state = availability()
+        saved = self.repo.settings()
         return {
             "capture": {
                 "available": state.available,
@@ -481,7 +504,7 @@ class Bridge:
                 "detail": state.detail,
                 "system_audio": default_loopback_available(),
             },
-            "transcription": provider_status(),
+            "transcription": provider_status(saved.get("stt_model") or None),
             "active": bool(self._capture is not None and self._capture.active),
             "source": self._capture_source,
         }
@@ -588,6 +611,16 @@ class Bridge:
         from .audio.transcribe import TranscriptionError, get_transcriber
 
         provider = str(payload.get("provider") or "groq").strip().lower()
+        # Settings decide provider/model; the request may override the provider
+        # for a one-off (the capture panel's dropdown does).
+        repo = getattr(self, "repo", None)
+        saved_getter = getattr(repo, "settings", None)
+        saved = saved_getter() if callable(saved_getter) else {}
+        if not payload.get("provider"):
+            provider = str(saved.get("stt_provider") or "groq").strip().lower()
+        model_override = payload.get("model")
+        if model_override is None:
+            model_override = saved.get("stt_model") or None
         pairs = self._capture.drain_both()
         if not pairs:
             return {
@@ -604,7 +637,7 @@ class Bridge:
         # missing/invalid key reports why, instead of the poll failing later
         # with an opaque internal error.
         try:
-            transcriber = get_transcriber(provider)
+            transcriber = get_transcriber(provider, model=model_override)
         except TranscriptionError as exc:
             raise ProviderNotConfiguredError(str(exc), detail={"provider": provider}) from exc
 

@@ -39,6 +39,7 @@
     memberView: null,
     commitmentsMine: [],
     commitmentsTeam: [],
+    reminders: null,
   };
 
   let socket = null;
@@ -1110,6 +1111,40 @@
       }));
     }
     if (actions.childNodes.length) row.append(actions);
+
+    // History is loaded on demand so the list stays cheap.
+    const historyToggle = el("button", "text-button commit-history-toggle", "History");
+    historyToggle.type = "button";
+    const historyBox = el("div", "commit-history");
+    historyBox.hidden = true;
+    historyToggle.addEventListener("click", async function () {
+      if (!historyBox.hidden) {
+        historyBox.hidden = true;
+        return;
+      }
+      try {
+        const data = await net.call("GET", "/api/commitments/" + commitment.commitment_id + "/history");
+        clear(historyBox);
+        (data.history || []).forEach(function (entry) {
+          const line = el("div", "commit-history-row");
+          line.append(el("span", "commit-history-when", (entry.created_at || "").slice(0, 16).replace("T", " ")));
+          line.append(
+            el(
+              "span",
+              "commit-history-what",
+              entry.action +
+                (entry.to_status ? " \\u2192 " + (COMMITMENT_STATUS[entry.to_status] || entry.to_status) : "")
+            )
+          );
+          line.append(el("span", "commit-history-who", entry.actor_name || ""));
+          historyBox.append(line);
+        });
+        historyBox.hidden = false;
+      } catch (error) {
+        announce(describeError(error), "error");
+      }
+    });
+    row.append(historyToggle, historyBox);
     return row;
   }
 
@@ -1134,6 +1169,12 @@
       state.commitmentsMine = mine.commitments || [];
       const team = await net.call("GET", "/api/orgs/" + state.orgId + "/commitments?scope=team");
       state.commitmentsTeam = team.commitments || [];
+      try {
+        const rem = await net.call("GET", "/api/orgs/" + state.orgId + "/reminders");
+        state.reminders = rem;
+      } catch (error) {
+        state.reminders = null;
+      }
     } catch (error) {
       state.commitmentsMine = [];
       state.commitmentsTeam = [];
@@ -1394,6 +1435,46 @@
     return card;
   }
 
+  // What needs attention today, from the reminders endpoint. Counts are
+  // computed server-side from commitments the caller may already see.
+  function renderReminders() {
+    const rem = state.reminders;
+    if (!rem) return null;
+    const counts = rem.counts || {};
+    const total = (counts.overdue || 0) + (counts.due_today || 0) + (counts.blocked || 0);
+    const card = el("div", "team-card team-reminders");
+    const head = el("div", "calls-head");
+    head.append(el("h3", "team-card-title", "Needs attention"));
+    head.append(el("span", "calls-total", total + (total === 1 ? " item" : " items")));
+    card.append(head);
+    if (!total) {
+      card.append(el("p", "team-card-note", "Nothing overdue and nothing blocked."));
+      return card;
+    }
+    function group(label, rows, tone) {
+      if (!rows || !rows.length) return;
+      card.append(el("h4", "commit-subhead", label + " \\u00b7 " + rows.length));
+      const list = el("div", "commit-list");
+      rows.forEach(function (row) {
+        const item = el("div", "commit-row is-" + (tone || row.status));
+        const main = el("div", "commit-main");
+        main.append(el("span", "commit-title", row.title));
+        const meta = el("span", "commit-meta");
+        meta.append(el("span", "commit-owner", row.owner_name || "Unassigned"));
+        if (row.due_on) meta.append(el("span", "commit-due", "due " + row.due_on));
+        main.append(meta);
+        item.append(main);
+        item.append(el("span", "commit-status is-" + row.status, COMMITMENT_STATUS[row.status] || row.status));
+        list.append(item);
+      });
+      card.append(list);
+    }
+    group("Overdue", rem.overdue, "blocked");
+    group("Due today", rem.due_today, "open");
+    group("Blocked", rem.blocked, "blocked");
+    return card;
+  }
+
   function renderOverview() {
     const card = el("div", "team-card team-overview");
     card.append(el("h3", "team-card-title", "Overview"));
@@ -1539,6 +1620,13 @@
   function setTab(id) {
     state.tab = id;
     render();
+    // Commitments and reminders are fetched when their tab opens, so the
+    // counts reflect right now rather than whatever arrived at sign-in.
+    if (id === "commitments" || id === "overview") {
+      void refreshCommitments().then(function () {
+        if (state.tab === id) render();
+      });
+    }
   }
 
   function renderTabs() {
@@ -1565,7 +1653,7 @@
     const wrap = el("div", "team-panel");
     wrap.setAttribute("role", "tabpanel");
     if (tab === "overview") {
-      wrap.append(renderOverview(), renderOrgPicker());
+      wrap.append(renderReminders(), renderOverview(), renderOrgPicker());
     } else if (tab === "calls") {
       wrap.append(renderCallsTab(), renderConversations());
     } else if (tab === "insights") {

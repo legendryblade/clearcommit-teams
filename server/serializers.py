@@ -178,6 +178,27 @@ def commitment_brief(commitment: "Commitment") -> dict:
     }
 
 
+def commitment_event_brief(event: "CommitmentEvent") -> dict:
+    detail = None
+    if event.detail_json:
+        try:
+            import json
+
+            detail = json.loads(event.detail_json)
+        except ValueError:
+            detail = None
+    return {
+        "event_id": event.id,
+        "commitment_id": event.commitment_id,
+        "actor_id": event.actor_id,
+        "action": event.action,
+        "from_status": event.from_status,
+        "to_status": event.to_status,
+        "detail": detail,
+        "created_at": _iso(event.created_at),
+    }
+
+
 def audit_brief(event: AuditEvent) -> dict:
     detail = None
     if event.detail_json:

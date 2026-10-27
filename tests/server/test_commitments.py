@@ -167,3 +167,72 @@ def test_conversation_evidence_round_trips(client, org_with_members) -> None:
     ).json()["data"]
     assert created["evidence_quote"] == "Who owns setup after we sign?"
     assert created["conversation_id"] == org_with_members["conversation_id"]
+
+
+def test_history_records_each_change(client, org_with_members) -> None:
+    org_id = org_with_members["org_id"]
+    rep = org_with_members["rep"]
+    created = _create(client, rep, org_id).json()["data"]
+    cid = created["commitment_id"]
+
+    rep.data("PATCH", f"/api/commitments/{cid}", {"status": "blocked"})
+    rep.data("PATCH", f"/api/commitments/{cid}", {"status": "done"})
+
+    history = rep.data("GET", f"/api/commitments/{cid}/history")["history"]
+    actions = [row["action"] for row in history]
+    assert actions[0] == "created"
+    assert "updated" in actions
+    statuses = [(row["from_status"], row["to_status"]) for row in history]
+    assert ("open", "blocked") in statuses or ("blocked", "done") in statuses
+    assert all(row["actor_name"] for row in history)
+
+
+def test_history_hidden_with_the_private_commitment(client, org_with_members) -> None:
+    org_id = org_with_members["org_id"]
+    manager = org_with_members["manager"]
+    rep = org_with_members["rep"]
+    private = _create(client, manager, org_id, visibility="private").json()["data"]
+    response = rep.call("GET", f"/api/commitments/{private['commitment_id']}/history")
+    assert response.status_code == 404
+
+
+def test_reminders_split_overdue_today_and_blocked(client, org_with_members) -> None:
+    from datetime import date, timedelta
+
+    org_id = org_with_members["org_id"]
+    rep = org_with_members["rep"]
+    today = date.today()
+
+    overdue = _create(
+        client, rep, org_id, title="Overdue promise",
+        due_on=(today - timedelta(days=2)).isoformat(),
+    ).json()["data"]
+    due_today = _create(
+        client, rep, org_id, title="Due today", due_on=today.isoformat()
+    ).json()["data"]
+    blocked = _create(client, rep, org_id, title="Blocked promise").json()["data"]
+    rep.data("PATCH", f"/api/commitments/{blocked['commitment_id']}", {"status": "blocked"})
+
+    data = rep.data("GET", f"/api/orgs/{org_id}/reminders")
+    titles = {k: [c["title"] for c in data[k]] for k in ("overdue", "due_today", "blocked")}
+    assert "Overdue promise" in titles["overdue"]
+    assert "Due today" in titles["due_today"]
+    assert "Blocked promise" in titles["blocked"]
+    assert data["counts"]["overdue"] >= 1
+
+
+def test_completed_commitments_are_not_reminded(client, org_with_members) -> None:
+    org_id = org_with_members["org_id"]
+    rep = org_with_members["rep"]
+    done = _create(client, rep, org_id, title="Finished promise").json()["data"]
+    rep.data("PATCH", f"/api/commitments/{done['commitment_id']}", {"status": "done"})
+
+    data = rep.data("GET", f"/api/orgs/{org_id}/reminders")
+    everything = data["overdue"] + data["due_today"] + data["blocked"] + data["undated"]
+    assert all(row["commitment_id"] != done["commitment_id"] for row in everything)
+
+
+def test_outsider_cannot_read_reminders(client, org_with_members, make_actor) -> None:
+    org_id = org_with_members["org_id"]
+    outsider = make_actor("rem-outsider", "Rae Outside")
+    assert outsider.call("GET", f"/api/orgs/{org_id}/reminders").status_code == 404

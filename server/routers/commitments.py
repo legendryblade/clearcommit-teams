@@ -1,4 +1,4 @@
-"""Commitments: promises made in conversations, tracked to completion.
+﻿"""Commitments: promises made in conversations, tracked to completion.
 
 The rules that make this honest:
 
@@ -28,10 +28,10 @@ from ..dependencies import (
     require_member,
 )
 from ..errors import ApiError
-from ..models import Commitment, Conversation, Membership, Profile, new_id
+from ..models import Commitment, CommitmentEvent, Conversation, Membership, Profile, new_id
 from ..schemas import CommitmentCreateRequest, CommitmentUpdateRequest
 from ..security import Principal
-from ..serializers import commitment_brief
+from ..serializers import commitment_brief, commitment_event_brief
 
 router = APIRouter(tags=["commitments"])
 
@@ -46,6 +46,31 @@ def _actor_names(session: Session, user_ids: set[str]) -> dict[str, str]:
         profile.id: profile.display_name
         for profile in session.query(Profile).filter(Profile.id.in_(user_ids)).all()
     }
+
+
+def _record(
+    session: Session,
+    commitment: Commitment,
+    actor_id: str,
+    action: str,
+    from_status: str | None,
+    to_status: str | None,
+    detail: dict | None = None,
+) -> None:
+    import json
+
+    session.add(
+        CommitmentEvent(
+            id=new_id(),
+            commitment_id=commitment.id,
+            org_id=commitment.org_id,
+            actor_id=actor_id,
+            action=action,
+            from_status=from_status,
+            to_status=to_status,
+            detail_json=json.dumps(detail, ensure_ascii=False) if detail else None,
+        )
+    )
 
 
 def _load(session: Session, commitment_id: str, user_id: str) -> tuple[Commitment, Membership]:
@@ -115,6 +140,7 @@ def create_commitment(
         commitment.id,
         {"title": commitment.title, "owner_id": owner_id},
     )
+    _record(session, commitment, principal.user_id, "created", None, commitment.status)
     session.commit()
     request.app.state.hub.emit(
         org_id, "commitment.created", "commitment", commitment.id, principal.user_id
@@ -164,6 +190,7 @@ def update_commitment(
     if not (is_owner or is_creator or is_reviewer):
         raise ApiError("forbidden", "You cannot change this commitment.", 403)
 
+    previous_status = commitment.status
     changes: dict[str, object] = {}
 
     if payload.status is not None:
@@ -227,6 +254,15 @@ def update_commitment(
         commitment.id,
         changes,
     )
+    _record(
+        session,
+        commitment,
+        principal.user_id,
+        "updated",
+        previous_status,
+        commitment.status,
+        changes,
+    )
     session.commit()
     request.app.state.hub.emit(
         commitment.org_id, "commitment.updated", "commitment", commitment.id, principal.user_id
@@ -246,3 +282,79 @@ def get_commitment(
     data["owner_name"] = people.get(commitment.owner_id)
     data["created_by_name"] = people.get(commitment.created_by)
     return {"ok": True, "data": data}
+
+@router.get("/api/commitments/{commitment_id}/history")
+def commitment_history(
+    commitment_id: str,
+    principal: Principal = Depends(get_provisioned_principal),
+    session: Session = Depends(get_session),
+):
+    commitment, _membership = _load(session, commitment_id, principal.user_id)
+    rows = (
+        session.query(CommitmentEvent)
+        .filter(CommitmentEvent.commitment_id == commitment.id)
+        .order_by(CommitmentEvent.created_at)
+        .all()
+    )
+    people = _actor_names(session, {row.actor_id for row in rows})
+    payload = []
+    for row in rows:
+        data = commitment_event_brief(row)
+        data["actor_name"] = people.get(row.actor_id)
+        payload.append(data)
+    return {"ok": True, "data": {"history": payload}}
+
+
+@router.get("/api/orgs/{org_id}/reminders")
+def reminders(
+    org_id: str,
+    principal: Principal = Depends(get_provisioned_principal),
+    session: Session = Depends(get_session),
+):
+    """What needs attention now: overdue, due today, and blocked.
+
+    This is a view over commitments the caller may already see. It is not a
+    notification system and nothing is sent anywhere.
+    """
+    from datetime import date
+
+    require_member(session, org_id, principal.user_id)
+    today = date.today().isoformat()
+    rows = (
+        session.query(Commitment)
+        .filter(
+            Commitment.org_id == org_id,
+            Commitment.status.in_(("awaiting_confirmation", "open", "blocked")),
+            Commitment.visibility == "team",
+        )
+        .all()
+    )
+    people = _actor_names(session, {r.owner_id for r in rows})
+    overdue, due_today, blocked, undated = [], [], [], []
+    for row in rows:
+        data = commitment_brief(row)
+        data["owner_name"] = people.get(row.owner_id)
+        if row.status == "blocked":
+            blocked.append(data)
+        elif not row.due_on:
+            undated.append(data)
+        elif row.due_on < today:
+            overdue.append(data)
+        elif row.due_on == today:
+            due_today.append(data)
+    return {
+        "ok": True,
+        "data": {
+            "today": today,
+            "overdue": overdue,
+            "due_today": due_today,
+            "blocked": blocked,
+            "undated": undated,
+            "counts": {
+                "overdue": len(overdue),
+                "due_today": len(due_today),
+                "blocked": len(blocked),
+                "undated": len(undated),
+            },
+        },
+    }

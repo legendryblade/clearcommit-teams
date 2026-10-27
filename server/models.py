@@ -246,7 +246,33 @@ class Commitment(Base):
     completed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # The promise this one revises. A changed deadline never overwrites the
+    # original: the new commitment points back at it.
+    supersedes_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("commitments.id", ondelete="SET NULL"), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
     )
+
+
+class CommitmentEvent(Base):
+    """History: one row per change, so a promise can be read back over time."""
+
+    __tablename__ = "commitment_events"
+    __table_args__ = (Index("ix_commitment_events_commitment", "commitment_id"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    commitment_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("commitments.id", ondelete="CASCADE")
+    )
+    org_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("organizations.id", ondelete="CASCADE")
+    )
+    actor_id: Mapped[str] = mapped_column(String(36), ForeignKey("profiles.id"))
+    action: Mapped[str] = mapped_column(String(40))
+    from_status: Mapped[str | None] = mapped_column(String(24), nullable=True)
+    to_status: Mapped[str | None] = mapped_column(String(24), nullable=True)
+    detail_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
